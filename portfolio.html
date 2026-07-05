@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mateo Lizcano Cabezas — Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F7;
+    --card:#FFFFFF;
+    --ink:#13233B;
+    --ink-soft:#44546B;
+    --line:#D8DEE6;
+    --red:#C8102E;
+    --steel:#3E5C76;
+    --mono:'IBM Plex Mono',monospace;
+    --body:'Instrument Sans',sans-serif;
+    --display:'Archivo',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto;} *{transition:none!important;animation:none!important;}}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--body);
+    line-height:1.6;
+    /* faint engineering grid */
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:56px 56px;
+    background-position:-1px -1px;
+  }
+  a{color:inherit;}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px;}
+
+  /* ---------- top bar ---------- */
+  header.top{
+    background:var(--card);
+    border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:10;
+  }
+  .top-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1060px;margin:0 auto;gap:16px;flex-wrap:wrap;}
+  .brand{font-family:var(--display);font-weight:800;letter-spacing:.02em;font-size:.95rem;text-transform:uppercase;}
+  .brand span{color:var(--red);}
+  nav.top-nav{display:flex;gap:20px;font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;}
+  nav.top-nav a{text-decoration:none;color:var(--ink-soft);}
+  nav.top-nav a:hover, nav.top-nav a:focus-visible{color:var(--red);}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--red);outline-offset:3px;border-radius:2px;}
+
+  /* ---------- hero ---------- */
+  .hero{padding:72px 0 48px;}
+  .hero-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:48px;align-items:center;}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--red);margin-bottom:18px;}
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,5.5vw,3.9rem);line-height:1.02;letter-spacing:-.015em;text-transform:uppercase;}
+  .hero-sub{margin-top:20px;font-size:1.12rem;color:var(--ink-soft);max-width:34em;}
+  .hero-sub strong{color:var(--ink);font-weight:600;}
+  .portrait{
+    aspect-ratio:4/5;background:var(--card);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  }
+  .portrait img{width:100%;height:100%;object-fit:cover;display:block;}
+  .placeholder{
+    border:2px dashed var(--steel);background:rgba(62,92,118,.06);
+    color:var(--steel);font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;
+    display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;text-transform:uppercase;
+  }
+  .portrait.placeholder{aspect-ratio:4/5;}
+
+  /* fact strip */
+  .facts{
+    margin-top:44px;background:var(--ink);color:#E9EDF3;
+    display:grid;grid-template-columns:repeat(4,1fr);
+  }
+  .fact{padding:18px 20px;border-left:1px solid rgba(255,255,255,.14);}
+  .fact:first-child{border-left:none;}
+  .fact .k{font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:#93A3B8;margin-bottom:4px;}
+  .fact .v{font-family:var(--display);font-weight:700;font-size:.95rem;letter-spacing:.01em;}
+  .fact .v em{font-style:normal;color:#FF6B81;}
+
+  /* ---------- sections ---------- */
+  section{padding:56px 0;}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;border-bottom:2px solid var(--ink);padding-bottom:10px;}
+  .sec-head h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:1.35rem;letter-spacing:.01em;}
+  .sec-head .tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);}
+
+  /* featured article */
+  .feature{
+    background:var(--card);border:1px solid var(--line);
+    display:grid;grid-template-columns:1.3fr 1fr;overflow:hidden;
+  }
+  .feature-text{padding:36px;}
+  .feature-text .quote{
+    font-family:var(--display);font-weight:700;font-size:1.45rem;line-height:1.3;letter-spacing:-.01em;
+  }
+  .feature-text .quote::before{content:"“";color:var(--red);}
+  .feature-text .quote::after{content:"”";color:var(--red);}
+  .feature-text p.src{margin-top:16px;color:var(--ink-soft);font-size:.95rem;}
+  .btn{
+    display:inline-block;margin-top:22px;padding:12px 22px;text-decoration:none;
+    background:var(--red);color:#fff;font-family:var(--mono);font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;
+    transition:background .15s ease;
+  }
+  .btn:hover,.btn:focus-visible{background:#A00D25;}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--ink);}
+  .btn.ghost:hover,.btn.ghost:focus-visible{background:var(--ink);color:#fff;}
+  .feature-media{border-left:1px solid var(--line);min-height:260px;}
+
+  /* ---------- achievement spec cards ---------- */
+  .ach{display:grid;gap:22px;}
+  .card{
+    background:var(--card);border:1px solid var(--line);
+    display:grid;grid-template-columns:88px 1fr 260px;
+  }
+  .rank{
+    background:var(--ink);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px 8px;
+  }
+  .rank .n{font-family:var(--display);font-weight:800;font-size:1.9rem;line-height:1;}
+  .rank .lbl{font-family:var(--mono);font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:#93A3B8;writing-mode:vertical-rl;}
+  .card-body{padding:26px 30px;}
+  .card-body h3{font-family:var(--display);font-weight:700;font-size:1.15rem;letter-spacing:.005em;margin-bottom:10px;}
+  .card-body p{color:var(--ink-soft);font-size:.97rem;max-width:52em;}
+  .card-spec{
+    border-left:1px dashed var(--line);padding:20px 24px;display:flex;flex-direction:column;justify-content:center;gap:12px;background:rgba(62,92,118,.04);
+  }
+  .spec-row .k{font-family:var(--mono);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);}
+  .spec-row .v{font-family:var(--mono);font-size:.8rem;color:var(--ink);}
+  .spec-row .v a{color:var(--red);text-decoration:none;border-bottom:1px solid currentColor;}
+  .spec-row .v a:hover{color:#A00D25;}
+  .spec-row .v .todo{color:var(--steel);border-bottom:1px dashed var(--steel);}
+
+  /* ---------- timeline / experience ---------- */
+  .rows{background:var(--card);border:1px solid var(--line);}
+  .row{
+    display:grid;grid-template-columns:150px 1fr;gap:18px;padding:20px 26px;border-top:1px solid var(--line);
+  }
+  .row:first-child{border-top:none;}
+  .row .when{font-family:var(--mono);font-size:.75rem;color:var(--ink-soft);padding-top:3px;}
+  .row h3{font-family:var(--display);font-weight:700;font-size:1rem;}
+  .row h3 span{color:var(--ink-soft);font-family:var(--body);font-weight:500;}
+  .row p{color:var(--ink-soft);font-size:.93rem;margin-top:4px;max-width:60em;}
+
+  /* ---------- leadership chips ---------- */
+  .lead-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .lead{background:var(--card);border:1px solid var(--line);padding:16px 20px;display:flex;gap:14px;align-items:baseline;}
+  .lead .dot{width:8px;height:8px;background:var(--red);flex:none;transform:translateY(-1px);}
+  .lead b{font-weight:600;}
+  .lead span{color:var(--ink-soft);font-size:.92rem;}
+
+  /* ---------- gallery ---------- */
+  .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .shot{aspect-ratio:4/3;}
+  .shot img{width:100%;height:100%;object-fit:cover;display:block;border:1px solid var(--line);}
+
+  /* ---------- footer ---------- */
+  footer{background:var(--ink);color:#E9EDF3;margin-top:40px;}
+  .foot-inner{max-width:1060px;margin:0 auto;padding:48px 24px;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;}
+  .foot-inner h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:1.3rem;}
+  .foot-links{display:flex;gap:14px;flex-wrap:wrap;}
+  .foot-links a{
+    font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:#E9EDF3;
+    text-decoration:none;border:1px solid rgba(255,255,255,.35);padding:10px 16px;
+  }
+  .foot-links a:hover,.foot-links a:focus-visible{border-color:var(--red);color:#FF6B81;}
+  .foot-note{grid-column:1/-1;font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;color:#7C8CA1;text-transform:uppercase;}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:860px){
+    .hero-grid{grid-template-columns:1fr;}
+    .portrait,.portrait.placeholder{max-width:340px;}
+    .facts{grid-template-columns:repeat(2,1fr);}
+    .fact{border-left:none;border-top:1px solid rgba(255,255,255,.14);}
+    .feature{grid-template-columns:1fr;}
+    .feature-media{border-left:none;border-top:1px solid var(--line);min-height:220px;}
+    .card{grid-template-columns:64px 1fr;}
+    .card-spec{grid-column:1/-1;border-left:none;border-top:1px dashed var(--line);flex-direction:row;flex-wrap:wrap;gap:20px;}
+    .lead-grid{grid-template-columns:1fr;}
+    .gallery{grid-template-columns:1fr 1fr;}
+    .row{grid-template-columns:1fr;gap:4px;}
+    .foot-inner{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">Mateo Lizcano <span>Cabezas</span></div>
+    <nav class="top-nav" aria-label="Sections">
+      <a href="#featured">Featured</a>
+      <a href="#achievements">Achievements</a>
+      <a href="#experience">Experience</a>
+      <a href="#leadership">Leadership</a>
+      <a href="#gallery">Gallery</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <p class="eyebrow">NTU Talent Scholarship · Digital Portfolio · Tech Disruptor</p>
+        <h1>From maths olympiads to safe robotics.</h1>
+        <p class="hero-sub">
+          I'm <strong>Mateo</strong> — a Robotics Engineering student at NTU Singapore and three-time
+          International Mathematical Olympiad medallist, now working on a single question:
+          <strong>how do we build intelligent systems that actually do what we want them to do?</strong>
+        </p>
+      </div>
+      <!-- REPLACE: swap the placeholder div below for
+           <div class="portrait"><img src="YOUR_PHOTO.jpg" alt="Mateo Lizcano Cabezas"></div> -->
+      <div class="portrait placeholder">Add portrait photo<br>(4:5 crop works best)</div>
+    </div>
+
+    <div class="facts" role="list">
+      <div class="fact" role="listitem"><div class="k">Programme</div><div class="v">BEng Robotics, NTU MAE</div></div>
+      <div class="fact" role="listitem"><div class="k">Base</div><div class="v">Singapore <em>·</em> Colombia</div></div>
+      <div class="fact" role="listitem"><div class="k">Focus</div><div class="v">Robotics × AI Alignment</div></div>
+      <div class="fact" role="listitem"><div class="k">Languages</div><div class="v">English · Spanish</div></div>
+    </div>
+  </section>
+
+  <!-- ================= FEATURED ARTICLE ================= -->
+  <section id="featured">
+    <div class="sec-head"><h2>Featured</h2><span class="tag">As reported by NTU</span></div>
+    <div class="feature">
+      <div class="feature-text">
+        <p class="quote">One student's leap from maths to robotics</p>
+        <p class="src">
+          NTU's School of Mechanical &amp; Aerospace Engineering profiled my path — from learning
+          multiplication with my father, to representing Colombia at three IMOs, to choosing robotics
+          and AI alignment over the well-worn route into pure mathematics.
+        </p>
+        <a class="btn" href="https://www.ntu.edu.sg/mae/news-events/news/detail/one-student's-leap-from-maths-to-robotics" target="_blank" rel="noopener">Read the article</a>
+      </div>
+      <!-- REPLACE: swap the placeholder for a photo from the article, e.g. the Astribot S1 shot:
+           <div class="feature-media"><img style="width:100%;height:100%;object-fit:cover" src="astribot.jpg" alt="Mateo with an Astribot S1 in Shenzhen"></div> -->
+      <div class="feature-media placeholder">Add article photo<br>(e.g. Astribot S1, Shenzhen trip)</div>
+    </div>
+  </section>
+
+  <!-- ================= ACHIEVEMENTS ================= -->
+  <section id="achievements">
+    <div class="sec-head"><h2>Talent Achievements</h2><span class="tag">Ranked by importance &amp; impact</span></div>
+    <div class="ach">
+
+      <article class="card">
+        <div class="rank"><div class="n">1</div><div class="lbl">Rank</div></div>
+        <div class="card-body">
+          <h3>International Mathematical Olympiad — Bronze Medal, Team Colombia</h3>
+          <p>Represented Colombia at three consecutive IMOs (2022–2024), earning a Bronze Medal and two
+             Honourable Mentions among the world's top pre-university mathematicians. Later returned as a
+             national instructor — training Colombia's top 30 students and authoring Team Selection Test
+             problems that chose the next delegation.</p>
+        </div>
+        <div class="card-spec">
+          <div class="spec-row"><div class="k">Year</div><div class="v">2022 – 2024</div></div>
+          <div class="spec-row"><div class="k">Level</div><div class="v">International</div></div>
+          <!-- REPLACE href="#" with your official contestant page on imo-official.org -->
+          <div class="spec-row"><div class="k">Evidence</div><div class="v"><a href="#" class="todo">Official IMO results ↗ (add link)</a></div></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="rank"><div class="n">2</div><div class="lbl">Rank</div></div>
+        <div class="card-body">
+          <h3>ASPIRE League UIDC — First Prize, representing NTU</h3>
+          <p>Nominated by an NTU professor as one of five students to represent the university at the
+             ASPIRE League Undergraduate Innovation Design Challenge. In one week, our cross-university,
+             cross-discipline team designed <strong>[platform name]</strong> — a platform for seniors to
+             create and join activities within their communities — winning First Prize among teams from
+             Asia's leading science &amp; technology universities.</p>
+        </div>
+        <div class="card-spec">
+          <div class="spec-row"><div class="k">Year</div><div class="v">2026</div></div>
+          <div class="spec-row"><div class="k">Level</div><div class="v">International</div></div>
+          <!-- REPLACE href="#" with your LinkedIn post about the win -->
+          <div class="spec-row"><div class="k">Evidence</div><div class="v"><a href="#" class="todo">LinkedIn post ↗ (add link)</a></div></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="rank"><div class="n">3</div><div class="lbl">Rank</div></div>
+        <div class="card-body">
+          <h3>Technical Alignment Research Accelerator (TARA) — Fellow</h3>
+          <p>Implemented Transformer architectures and RLHF from scratch, then developed novel
+             interpretability techniques — cross-language activation steering and deleted-concept steering.
+             My capstone extended Manifold Steering with experiments producing stronger findings than
+             state-of-the-art methods; manuscript in preparation.</p>
+        </div>
+        <div class="card-spec">
+          <div class="spec-row"><div class="k">Year</div><div class="v">2026</div></div>
+          <div class="spec-row"><div class="k">Level</div><div class="v">International</div></div>
+          <!-- OPTIONAL: link the TARA programme page or your project write-up -->
+          <div class="spec-row"><div class="k">Evidence</div><div class="v"><a href="#" class="todo">Project write-up ↗ (add link)</a></div></div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ================= EXPERIENCE ================= -->
+  <section id="experience">
+    <div class="sec-head"><h2>Research &amp; Industry</h2><span class="tag">Selected experience</span></div>
+    <div class="rows">
+      <div class="row">
+        <div class="when">Jan 2026 — Present</div>
+        <div>
+          <h3>Huawei <span>· Processor Algorithms Intern</span></h3>
+          <p>Built an end-to-end pipeline generating synthetic training data for autonomous driving —
+             converting daytime RGB footage into nighttime RAW imagery with predicted optical flow.</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="when">Mar &amp; Jun 2026</div>
+        <div>
+          <h3>Jane Street <span>· First-Year Trading &amp; Technology Program, Portal Singapore</span></h3>
+          <p>Selected for two programmes across Hong Kong and Singapore; placed 1st in a team trading
+             simulation against 15 other pairs.</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="when">Mar — Aug 2024</div>
+        <div>
+          <h3>Non-Trivial <span>· Fellow (1 of 172 from 11,000+ applicants)</span></h3>
+          <p>Applied queueing theory to simulate healthcare capacity for pandemic preparedness — and
+             first encountered AI safety, the field that now shapes my direction.</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="when">Aug 2024 — Aug 2025</div>
+        <div>
+          <h3>Colombian Math Olympiads <span>· National Instructor</span></h3>
+          <p>Lectured at National Training Camps and directed the Advanced Seedbed Program for
+             Colombia's top 30 students.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LEADERSHIP ================= -->
+  <section id="leadership">
+    <div class="sec-head"><h2>Leadership &amp; Service at NTU</h2><span class="tag">Year 1</span></div>
+    <div class="lead-grid">
+      <div class="lead"><div class="dot"></div><div><b>Sports Director, Hall 6 JCRC</b> — <span>co-created the first-ever Hall 6 Fest and ran Awards Night for 140 residents</span></div></div>
+      <div class="lead"><div class="dot"></div><div><b>Technical Fellow, Nanyang AI Safety</b> — <span>building NTU's technical AI safety community</span></div></div>
+      <div class="lead"><div class="dot"></div><div><b>Captain, Hall 6 Tennis</b> — <span>led the team through the inter-hall tournament</span></div></div>
+      <div class="lead"><div class="dot"></div><div><b>Group Leader, Ignite Change</b> — <span>Welfare Services Club community service</span></div></div>
+      <div class="lead"><div class="dot"></div><div><b>Senior-in-Charge, Hall Orientation</b> — <span>and Group Leader for MAE's freshmen orientation</span></div></div>
+      <div class="lead"><div class="dot"></div><div><b>Peer Helper</b> — <span>trained peer supporter under NTU's Peer Helping Programme</span></div></div>
+    </div>
+  </section>
+
+  <!-- ================= GALLERY ================= -->
+  <section id="gallery">
+    <div class="sec-head"><h2>Gallery</h2><span class="tag">Moments</span></div>
+    <div class="gallery">
+      <!-- REPLACE each placeholder with:
+           <figure class="shot"><img src="photo.jpg" alt="describe the moment"></figure> -->
+      <div class="shot placeholder">ASPIRE UIDC — award ceremony</div>
+      <div class="shot placeholder">IMO — with Team Colombia</div>
+      <div class="shot placeholder">Shenzhen robotics trip</div>
+      <div class="shot placeholder">Hall 6 Fest / Awards Night</div>
+      <div class="shot placeholder">Teaching at national camps</div>
+      <div class="shot placeholder">Tennis / hall life</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="foot-inner">
+    <h2>Let's build systems worth trusting.</h2>
+    <div class="foot-links">
+      <a href="mailto:mateolizcano@gmail.com">Email</a>
+      <a href="https://linkedin.com/in/mateolizcano/" target="_blank" rel="noopener">LinkedIn</a>
+      <!-- REPLACE href="#" with a hosted PDF of your resume -->
+      <a href="#">Resume (PDF)</a>
+    </div>
+    <div class="foot-note">Mateo Lizcano Cabezas · NTU Singapore · Portfolio prepared for the NTU Talent Scholarship (Mid-Term)</div>
+  </div>
+</footer>
+
+</body>
+</html>
