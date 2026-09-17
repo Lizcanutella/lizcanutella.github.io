@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://lizcanomateo.com
+Sitemap: https://lizcanomateo.com/sitemap.xml
