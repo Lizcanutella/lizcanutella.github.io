@@ -1,0 +1,2152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chromatic polynomial | Mateo Lizcano</title>
+<meta name="description" content="Compute the exact chromatic polynomial of any country map, or a graph you draw, and walk the deletion-contraction tree a learned edge selector builds.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap">
+<style>
+/* Paper, ink and amber from lizcanomateo.com; one bright theme, like the adjacency globe. */
+:root {
+  color-scheme: light;
+  --paper: #fcfbf8; --panel: #ffffff; --ink: #1a1917; --ink-soft: #6b675f; --line: #e8e4db;
+  --accent: #b45309; --accent-bright: #d97706; --accent-wash: #fbf3e6; --accent-mid: #edc58f;
+  --ocean: #f3efe6; --graticule: #e9e4d8; --land: #ffffff; --land-hi: #fbf3e6;
+  --border: #b9b1a2; --border-faint: #e1dbcf; --muted-fill: #f1ede5;
+  /* step kinds: validated categorical set (dataviz validate_palette, light, on --paper);
+     each kind also has its own shape, so colour never carries the meaning alone */
+  --k-branch: #b45309; --k-split: #2a78d6; --k-base: #1baf7a; --k-cache: #6250d6;
+  --shadow: 0 1px 2px rgb(26 25 23 / .05), 0 8px 24px rgb(26 25 23 / .06);
+  --display: "Newsreader", Georgia, "Times New Roman", serif;
+  --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; }
+button, select, input { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* ---- hero: the polynomial ---- */
+.hero { flex: none; padding: 1.1rem 1.5rem .9rem; border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head run" "facts facts" "poly poly" "side side";
+  gap: 0 2rem; align-items: end; }
+.hero-head { grid-area: head; min-width: 0; }
+.hero .run-row { grid-area: run; margin-bottom: .45rem; }
+.poly-wrap { grid-area: poly; min-width: 0; }
+.hero .facts { grid-area: facts; }
+.run-side { grid-area: side; margin-top: .3rem; display: flex; flex-direction: column; gap: .35rem; align-items: flex-end; min-width: 0; }
+.eyebrow { font-size: .85rem; letter-spacing: .06em; color: var(--ink); margin: 0; }
+.eyebrow b { color: var(--accent); font-weight: 500; }
+.hero h1 { font: 500 clamp(1.7rem, 3vw, 2.3rem)/1.1 var(--display); letter-spacing: -.01em; margin: .15rem 0 .45rem; }
+.hero h1 .sub { font: 400 .95rem var(--body); letter-spacing: .01em; color: var(--ink); white-space: nowrap; }
+.poly { font: 400 1.18rem/1.55 var(--display); margin: 0; max-height: 1.55em; overflow: hidden;
+  position: relative; overflow-wrap: anywhere; font-variant-numeric: lining-nums; }
+.poly.open { max-height: 40vh; overflow-y: auto; }
+.poly i { font-style: italic; }
+.poly sup { font-size: .68em; line-height: 0; }
+.poly .lhs { color: var(--ink); }
+.poly-actions { display: flex; gap: .5rem; align-items: center; margin-top: .3rem; }
+.poly .tail { color: var(--ink); }
+.poly-actions .pill { padding: .15rem .7rem; font-size: .8rem; }
+.facts { display: flex; flex-wrap: wrap; gap: .25rem 1.4rem; margin: 0 0 .35rem; font-variant-numeric: tabular-nums; }
+.facts div { display: flex; gap: .4rem; align-items: baseline; }
+.facts dt { color: var(--ink); font-size: .85rem; }
+.facts dt::after { content: ":"; }
+.facts dt i { font: italic 1.05rem var(--display); }
+.facts dd { margin: 0; font-weight: 600; }
+.facts .ok { color: #157a55; font-weight: 500; }
+.facts .bad { color: #b42318; font-weight: 600; }
+.run-row { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.field { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--ink); }
+.info { position: relative; display: inline-grid; place-items: center; width: 1.05rem; height: 1.05rem; margin-left: -.15rem;
+  border: 1px solid var(--line); border-radius: 50%; font: italic 500 .72rem/1 var(--display); color: var(--ink); cursor: help; }
+.info:hover, .info:focus-visible { color: var(--ink); border-color: var(--accent); }
+.info::after { content: attr(data-tip); position: absolute; top: calc(100% + .5rem); right: -1rem; z-index: 20; width: 19rem;
+  padding: .6rem .75rem; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+  font: 400 .82rem/1.45 var(--body); color: var(--ink); text-align: left; white-space: normal;
+  opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none; }
+.info:hover::after, .info:focus-visible::after { opacity: 1; visibility: visible; }
+select { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .38rem .8rem; color: var(--ink); cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: .45rem; padding: .38rem .9rem; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--panel); color: var(--ink); cursor: pointer; font-size: .88rem; white-space: nowrap; }
+.pill:hover { color: var(--ink); border-color: var(--border-faint); background: var(--accent-wash); }
+/* levers: a square checkbox that shows a tick when on */
+.pill[aria-pressed] { padding-left: .6rem; }
+.pill[aria-pressed]::before { content: ""; width: 12px; height: 12px; box-sizing: border-box; border-radius: 2px; border: 1.5px solid var(--ink);
+  display: grid; place-items: center; font: 700 9px/1 var(--body); color: var(--panel); flex: none; }
+.pill[aria-pressed="true"]::before { content: "✓"; background: var(--ink); }
+.pill:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--ink); background: var(--panel); }
+.pill.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 500; }
+.pill.primary:hover { background: #33302b; border-color: #33302b; }
+.status { font-size: .85rem; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+.run-side:has(.status:empty):has(.history:empty) { display: none; }
+.status .err { color: #b42318; }
+.history { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; }
+.history button { border: 1px solid var(--line); background: none; border-radius: 4px; padding: .1rem .5rem; font-size: .78rem;
+  color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+.history button[aria-current="true"] { border-color: var(--accent); color: var(--ink); background: var(--accent-wash); }
+
+/* ---- workspace: inset column + tree stage ---- */
+.work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(330px, 400px) minmax(0, 1fr); }
+.side { border-right: 1px solid var(--line); overflow-y: auto; min-height: 0; background: var(--panel); }
+.inset { position: relative; border-bottom: 1px solid var(--line); background: var(--ocean); }
+.inset-tabs { position: absolute; top: .7rem; left: .7rem; right: .7rem; z-index: 2; display: flex; gap: .35rem; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); padding: 2px; box-shadow: var(--shadow); }
+.seg button { border: 0; background: none; border-radius: 3px; padding: .22rem .75rem; font-size: .82rem; color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.search { position: relative; flex: 1; min-width: 0; }
+#search { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: .32rem .8rem; background: var(--panel);
+  box-shadow: var(--shadow); font-size: .85rem; }
+#results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; margin: 0; padding: 4px 0;
+  list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); }
+#results li { padding: .3rem .8rem; cursor: pointer; display: flex; justify-content: space-between; gap: .6rem; font-size: .88rem; }
+#results li small { color: var(--ink); font-variant-numeric: tabular-nums; }
+#results li[aria-selected="true"], #results li:hover { background: var(--accent-wash); }
+#globe { display: block; width: 100%; aspect-ratio: 1 / .82; touch-action: none; cursor: grab; }
+#globe.dragging { cursor: grabbing; }
+.inset-foot { position: absolute; left: .7rem; bottom: .6rem; right: .7rem; display: flex; gap: .4rem; align-items: center; pointer-events: none; }
+.inset-foot > * { pointer-events: auto; }
+.inset-foot .pill { box-shadow: var(--shadow); padding: .25rem .7rem; font-size: .8rem; }
+.inset-foot .hint { margin-left: auto; font: .9rem var(--display); color: var(--ink); }
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  padding: .3rem .6rem; font-size: .82rem; box-shadow: var(--shadow); max-width: 320px; }
+#tip small { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* draw mode */
+.draw { background: var(--panel); padding: 3.1rem .7rem .7rem; }
+#canvas { display: block; width: 100%; aspect-ratio: 1 / .82; border: 1px dashed var(--border-faint); border-radius: 6px; background: var(--paper); touch-action: none; }
+.draw-tools { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .55rem; align-items: center; }
+.draw-tools .pill { padding: .22rem .7rem; font-size: .8rem; }
+.draw-tools input[type=number] { width: 3.6em; border: 1px solid var(--line); border-radius: 4px; padding: .12rem .3rem; background: var(--panel); }
+.draw .hint { margin: .45rem 0 0; font-size: .8rem; color: var(--ink); }
+
+/* inspector */
+.step { padding: 1.1rem 1.1rem 2rem; }
+.step .eyebrow { font-variant-numeric: tabular-nums; }
+.step h2 { font: 500 1.45rem/1.15 var(--display); margin: .25rem 0 .35rem; letter-spacing: -.01em; text-wrap: balance; }
+.step .rule { font: 1.05rem/1.4 var(--display); color: var(--ink); margin: 0 0 .7rem; }
+.step .rule i { font-style: italic; }
+.figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
+.figure svg { display: block; width: 100%; height: auto; max-height: 340px; }
+.figure-actions { display: flex; gap: .5rem; margin: .6rem 0 0; }
+.figure-actions .pill { padding: .2rem .75rem; font-size: .82rem; }
+.figure figcaption { padding: .45rem .7rem; font-size: .8rem; color: var(--ink); border-top: 1px solid var(--line); background: var(--panel); }
+.kids-h { font-size: 13px; font-weight: 600; color: var(--ink); border-bottom: 1px solid var(--line);
+  padding-bottom: .45rem; margin: 1.2rem 0 .7rem; display: flex; justify-content: space-between; }
+.kids-h span { font-weight: 400; }
+.kids { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+.kid { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 0; cursor: pointer; text-align: left; overflow: hidden; }
+.kid:hover { border-color: var(--accent); }
+.kid svg { display: block; width: 100%; height: auto; max-height: 150px; }
+.kid div { padding: .35rem .55rem; border-top: 1px solid var(--line); background: var(--panel); font-size: .8rem; display: flex; justify-content: space-between; gap: .4rem; }
+.kid b { font: 500 .98rem var(--display); }
+.kid b i { font-style: italic; }
+.kid small { color: var(--ink); font-variant-numeric: tabular-nums; }
+.kids-note { margin: .45rem 0 0; font-size: .8rem; color: var(--ink); }
+.reuse { margin: .9rem 0 0; padding: .7rem .85rem; border: 1px solid var(--line); border-left: 3px solid var(--k-cache); border-radius: 4px; background: var(--panel); }
+.reuse p { margin: 0 0 .6rem; font-size: .88rem; }
+.reuse button:not(.pill), .replay-note button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--k-cache); font-variant-numeric: tabular-nums; text-decoration: underline; text-underline-offset: 2px; }
+.reuse .pill { padding: .25rem .75rem; font-size: .82rem; }
+.reuse-list { display: flex; flex-wrap: wrap; gap: .2rem .7rem; font-size: .8rem !important; color: var(--ink); }
+.replay-note { margin: 0 0 .7rem; padding: .45rem .7rem; font-size: .82rem; color: var(--ink); background: color-mix(in srgb, var(--k-cache) 8%, var(--panel)); border-radius: 4px; }
+.leaf { font: 1rem/1.4 var(--display); color: var(--ink); margin: 1rem 0 0; }
+.meta { display: grid; grid-template-columns: auto 1fr; gap: .2rem 1rem; margin: 1.2rem 0 0; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.meta dt { color: var(--ink); }
+.meta dt::after { content: ":"; }
+.meta dd { margin: 0; }
+.crumbs { display: flex; flex-wrap: wrap; gap: .15rem .35rem; margin: 1.2rem 0 0; font-size: .78rem; color: var(--ink); }
+.crumbs button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink); font-variant-numeric: tabular-nums; }
+.crumbs button:hover { color: var(--accent); }
+.crumbs .arrow { color: var(--accent); }
+.empty-step { padding: 1.5rem 1.1rem; font: 1.05rem/1.5 var(--display); color: var(--ink); }
+
+/* tree stage */
+.stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); }
+#tree { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+#tree:active { cursor: grabbing; }
+#radial { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#radial:active { cursor: grabbing; }
+#tree .link { fill: none; stroke: var(--border); stroke-width: 1; }
+#tree .link.contract { stroke-dasharray: 3 3; }
+#tree .link.heavy { stroke: var(--accent); stroke-width: 2; }
+#tree .node { cursor: pointer; }
+#tree .node path { stroke: var(--paper); stroke-width: 1.5; }
+#tree .node.cache path { fill: var(--paper) !important; stroke: var(--k-cache); stroke-width: 1.8; }
+#tree .node .halo { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+#tree .virtual { opacity: .45; }
+#tree .reuse-arc { fill: none; stroke: var(--k-cache); stroke-width: 1.6; stroke-dasharray: 5 4; pointer-events: none; }
+#tree .more { font: 500 10px var(--body); fill: var(--ink); }
+#tree .vlabel { font: italic 11px var(--display); fill: var(--ink); }
+#tree .far .vlabel, #tree .far .more { display: none; }
+.stage-top { position: absolute; top: .8rem; left: 1rem; display: flex; flex-direction: column; gap: .4rem; align-items: flex-start; pointer-events: none; }
+.stage-top > *, .stage-top .look > * { pointer-events: auto; }
+.stage-top h2 { font: 500 1.15rem var(--display); margin: 0 0 .15rem; }
+.stage-top .look { display: flex; flex-direction: column; gap: .4rem; align-items: flex-start; margin-top: 1rem; pointer-events: none; }
+.stage-top select { box-shadow: var(--shadow); padding: .25rem .7rem; font-size: .82rem; }
+.stage-top .field { font-size: .82rem; }
+.stage.dark .stage-top .field { color: #f2f6fc; }
+.stage.dark .stage-top h2 { color: #f2f6fc; }
+.legend .ramp { width: 90px; height: 8px; border-radius: 2px; }
+.stage-top .pill { box-shadow: var(--shadow); padding: .25rem .75rem; font-size: .82rem; }
+.legend { position: absolute; left: 1rem; bottom: .8rem; display: flex; gap: .3rem 1rem; flex-wrap: wrap; font-size: .8rem; color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 4px; padding: .35rem .7rem; max-width: calc(100% - 6rem); }
+.stage.dark .legend { background: color-mix(in srgb, var(--scene) 85%, transparent); border-color: rgb(255 255 255 / .14); color: #dfe4ec; }
+.legend span { display: inline-flex; gap: .35rem; align-items: center; }
+.legend svg { overflow: visible; }
+.zoom { position: absolute; right: 1rem; bottom: .8rem; display: flex; flex-direction: column; gap: 6px; }
+.zoom button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  cursor: pointer; font-size: 17px; box-shadow: var(--shadow); }
+.zoom button:hover { background: var(--accent-wash); }
+.stage-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 2rem; pointer-events: none; }
+.stage-empty p { font: 1.25rem/1.45 var(--display); color: var(--ink); max-width: 30rem; margin: 0; }
+.stage-empty .pill { pointer-events: auto; margin-top: 1rem; }
+/* About: a round "?" in the stage's top right that widens into a labelled button; the panel opens on the right */
+.about-btn { position: absolute; right: 1rem; top: .8rem; z-index: 3; height: 36px; min-width: 36px; max-width: 36px; padding: 0;
+  box-sizing: border-box; display: inline-grid; place-items: center; font: 500 13px var(--body); color: var(--ink);
+  background: var(--paper); border: 1.5px solid var(--ink); border-radius: 999px; cursor: pointer; overflow: hidden;
+  white-space: nowrap; transition: max-width .2s ease, padding .2s ease; }
+.about-btn > span { grid-area: 1 / 1; transition: opacity .15s; }
+.about-btn .q { font: 500 18px/1 var(--display); }
+.about-btn .t { opacity: 0; }
+.about-btn:hover, .about-btn:focus-visible { max-width: 120px; padding: 0 16px; background: var(--accent-wash); }
+.about-btn:hover .q, .about-btn:focus-visible .q { opacity: 0; }
+.about-btn:hover .t, .about-btn:focus-visible .t { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
+.stage.about-open .about-btn { display: none; }
+.about-panel { position: absolute; right: 1rem; top: .8rem; bottom: .8rem; width: clamp(280px, calc(100% - 420px), 360px); z-index: 4;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow); }
+.about-panel header { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
+.about-panel h2 { font: 500 27px/1.1 var(--display); letter-spacing: -.01em; margin: 0; }
+.about-panel .close { border: 0; background: none; font: 400 22px/1 var(--body); color: var(--ink); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 4px; margin: -6px -8px 0 0; }
+.about-panel .close:hover { background: var(--accent-wash); }
+.about-panel .body { overflow-y: auto; padding: 0 16px 16px; font-size: 13.5px; line-height: 1.55; }
+.about-panel p { margin: 0 0 10px; }
+.about-panel .lead { font: 17px/1.4 var(--display); }
+.about-panel h3 { font: 500 18px/1.2 var(--display); color: var(--ink); margin: 20px 0 6px; }
+.about-panel ul, .about-panel ol { margin: 0; padding-left: 18px; }
+.about-panel li { margin-bottom: 6px; }
+.about-panel li::marker { color: var(--accent); }
+.about-panel b { font-weight: 600; }
+.about-panel .fine { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.about-panel a { color: var(--accent); }
+.stage.about-open .zoom { right: calc(1rem + clamp(280px, calc(100% - 420px), 360px) + 12px); }
+.stage.about-open .legend { max-width: calc(100% - clamp(280px, calc(100% - 420px), 360px) - 3.5rem); }
+.busy-bar { position: absolute; left: 0; right: 0; top: 0; height: 2px; overflow: hidden; }
+.busy-bar::after { content: ""; position: absolute; inset: 0; width: 30%; background: var(--accent); animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .busy-bar::after { animation: none; width: 100%; opacity: .5; } }
+
+@media (max-width: 900px) {
+  .stage-top, .stage-top .look { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .stage-top { right: 3.6rem; }
+  .about-panel { left: .5rem; right: .5rem; top: .5rem; bottom: .5rem; width: auto; }
+  .stage.about-open .zoom { right: 1rem; }
+  .stage.about-open .legend { max-width: calc(100% - 5rem); }
+  .stage-top h2 { width: 100%; }
+  .stage-top .look { margin: 0; }
+  body { height: auto; }
+  .status:empty { min-height: 0; }
+  .hero { grid-template-columns: minmax(0, 1fr); padding: 1rem; }
+  .hero { grid-template-areas: "head" "run" "facts" "poly" "side"; }
+  .info::after { right: auto; left: -5.5rem; width: min(19rem, calc(100vw - 2rem)); }
+  .hero .run-row { margin: .3rem 0 .6rem; }
+  .run-side, .run-row, .history { align-items: flex-start; justify-content: flex-start; }
+  .status { text-align: left; }
+  .work { display: flex; flex-direction: column; }
+  .side { display: contents; }
+  .inset { order: 3; }
+  .stage { order: 1; height: 88svh; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .step, .empty-step { order: 2; background: var(--panel); }
+  .legend { max-width: calc(100% - 5rem); font-size: .75rem; }
+}
+</style>
+<!-- site-nav:head -->
+<link rel="icon" href="/icon.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="/apple-icon.png" type="image/png" sizes="180x180">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Newsreader:opsz,wght@6..72,400&display=swap">
+<style>
+.sn { position: sticky; top: 0; z-index: 50; flex: none; box-sizing: border-box;
+  background: color-mix(in srgb, #FCFBF8 88%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid #E8E4DB; font-size: 16px; line-height: 1.65; }
+.sn *, .sn *::before, .sn *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.sn-inner { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; height: 3.5rem;
+  display: flex; align-items: center; gap: 2rem; }
+.sn-mark { display: inline-flex; align-items: center; gap: .6rem; color: #1A1917; text-decoration: none; }
+.sn-mark:hover { color: #B45309; text-decoration: none; }
+.sn-mark img { display: block; height: 1.7rem; width: auto; }
+.sn-mark span { font-family: "Cinzel Decorative", Georgia, serif; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .14em; font-size: 1.02rem; line-height: 1; white-space: nowrap; }
+.sn nav { display: flex; align-items: baseline; gap: 1.25rem; margin-left: auto; overflow-x: auto; }
+.sn nav a { color: #1A1917; white-space: nowrap; text-decoration: none;
+  font-family: "Newsreader", Georgia, serif; font-size: 1.05rem; }
+.sn nav a:hover { color: #1A1917; text-decoration: none; }
+.sn nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.sn a:focus-visible { outline: 2px solid #B45309; outline-offset: 3px; border-radius: 2px; }
+@media (max-width: 700px) {
+  .sn-inner { gap: .5rem; padding: 0 1.25rem; }
+  .sn-mark span { display: none; }
+  .sn-mark img { height: 1.8rem; }
+  .sn nav { gap: .8rem; }
+  .sn nav a { font-size: .94rem; }
+  .sn nav a[href="/"] { display: none; }
+}
+</style>
+<!-- /site-nav:head -->
+</head>
+<body>
+<!-- site-nav:body -->
+<header class="sn"><div class="sn-inner"><a class="sn-mark" href="/" aria-label="Mateo Lizcano - home"><img src="/logo.svg" alt="" aria-hidden="true"><span>Mateo Lizcano</span></a><nav aria-label="Main"><a href="/">Home</a><a href="/work/">Research</a><a href="/interactive/" aria-current="page">Interactive</a><a href="/journey/">Journey</a></nav></div></header>
+<!-- /site-nav:body -->
+<section class="hero" aria-live="polite">
+  <div class="hero-head">
+    <h1><span id="title">Chromatic decomposition</span> <span class="sub" id="eyebrow">Loading graphs…</span></h1>
+  </div>
+    <div class="run-row">
+      <label class="field">Edge Selector
+        <span class="info" tabindex="0" role="note" aria-label="What is an edge selector?" data-tip="At each decision the engine picks one edge, then splits the graph in two: delete that edge, or contract it (merge its two ends). The edge selector is the rule that picks the edge. Good picks keep the tree small. The learned and MLP policies were trained to choose well; the others are classic heuristics.">i</span>
+        <select id="selector">
+          <option value="learned">Learned policy (LIN-SI)</option>
+          <option value="mlp">MLP policy</option>
+          <option value="min_degree_sum">Min degree-sum</option>
+          <option value="max_degree_sum">Max degree-sum</option>
+          <option value="mindeg">Min degree</option>
+          <option value="vorder">Vertex order</option>
+          <option value="monagan">Monagan</option>
+        </select>
+      </label>
+      <button class="pill" id="t-cache" aria-pressed="true" title="Reuse results for isomorphic subgraphs (nauty)">Cache</button>
+      <button class="pill primary" id="compute">Compute</button>
+      <button class="pill" id="stop" hidden>Stop</button>
+    </div>
+  <div class="poly-wrap">
+    <p class="poly" id="poly"></p>
+    <div class="poly-actions" id="poly-actions" hidden>
+      <button class="pill" id="poly-more" aria-pressed="false" hidden title="Show every term of the polynomial">Full polynomial</button>
+      <button class="pill" id="copy-tex" title="Copies P(G, k) as LaTeX source">Copy polynomial to clipboard</button>
+    </div>
+  </div>
+  <dl class="facts" id="facts"></dl>
+  <div class="run-side">
+    <div class="status" id="status"></div>
+    <div class="history" id="history" aria-label="Runs of this graph"></div>
+  </div>
+</section>
+
+<div class="work">
+  <aside class="side">
+    <div class="inset">
+      <div class="inset-tabs">
+        <div class="seg" role="group" aria-label="Source">
+          <button id="m-globe" aria-pressed="true">Globe</button><button id="m-draw" aria-pressed="false">Draw</button>
+        </div>
+        <div class="search" id="search-wrap">
+          <input id="search" type="search" placeholder="Country or ISO code" autocomplete="off" role="combobox"
+                 aria-expanded="false" aria-controls="results" aria-label="Find a country">
+          <ul id="results" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <div id="globe-pane">
+        <canvas id="globe" aria-label="Globe: pick a country; the selected step's regions are highlighted"></canvas>
+        <div class="inset-foot">
+          <button class="pill" id="to-world">← World</button>
+          <span class="hint" id="globe-hint"></span>
+        </div>
+      </div>
+      <div class="draw" id="draw-pane" hidden>
+        <svg id="canvas" aria-label="Drawing canvas"></svg>
+        <div class="draw-tools">
+          <div class="seg" role="group" aria-label="Tool">
+            <button data-tool="vertex" aria-pressed="true">Vertex</button><button data-tool="edge" aria-pressed="false">Edge</button><button data-tool="move" aria-pressed="false">Move</button><button data-tool="erase" aria-pressed="false">Erase</button>
+          </div>
+          <button class="pill" id="d-clear">Clear</button>
+        </div>
+        <div class="draw-tools">
+          <span class="field">n <input type="number" id="d-n" value="8" min="1" max="40"></span>
+          <button class="pill" data-gen="cycle">Cycle</button><button class="pill" data-gen="wheel">Wheel</button>
+          <button class="pill" data-gen="complete">Complete</button><button class="pill" data-gen="grid">Grid</button>
+          <button class="pill" data-gen="petersen">Petersen</button><button class="pill" data-gen="random">Random</button>
+        </div>
+        <p class="hint" id="draw-hint">Click to place a vertex. Drag from one vertex to another to join them.</p>
+      </div>
+    </div>
+    <div id="step-pane" class="empty-step">Pick a country on the globe, or draw a graph and press Compute, and its decomposition tree appears on the right. Click any step to see its graph here.</div>
+  </aside>
+
+  <main class="stage" id="stage">
+    <svg id="tree" tabindex="0" aria-label="Decomposition tree. Arrow keys move between steps."></svg>
+    <canvas id="radial" tabindex="0" hidden aria-label="Radial decomposition tree: the root at the centre, depth outwards, each step's angle its share of the work. Arrow keys move between steps."></canvas>
+    <div class="stage-top" id="stage-top" hidden>
+      <h2>Decomposition tree</h2>
+      <div class="seg" role="group" aria-label="Layout"><button id="v-radial" aria-pressed="true">Radial</button><button id="v-tree" aria-pressed="false">Tree</button></div>
+      <button class="pill radial-only" id="grow" title="Draw the tree again in the order the engine worked">▶ Grow</button>
+      <button class="pill" id="unfold-all" aria-pressed="true" hidden>Unfold cache reuse</button>
+      <button class="pill" id="collapse" hidden>Collapse</button>
+      <button class="pill primary radial-only" id="download" title="Save the whole radial tree as a PNG, 8000 px tall, in the current look">Download as PNG</button>
+      <div class="look radial-only">
+        <label class="field">Colour by
+        <select id="palette" title="How the radial tree is coloured">
+          <optgroup label="Data"><option value="size">Graph size</option><option value="kind">Step type</option></optgroup>
+          <optgroup label="Single colour"><option value="ink">Ink</option><option value="amber">Amber</option><option value="cyanotype">Cyanotype</option><option value="sepia">Sepia</option></optgroup>
+        </select></label>
+        <button class="pill" id="glow" aria-pressed="false" title="A dark background where overlapping lines add up and glow">Glow</button>
+        <button class="pill" id="labels" aria-pressed="false" title="Hide the depth labels on the rings">Hide labels</button>
+      </div>
+    </div>
+    <div class="stage-empty" id="stage-empty"><div><p id="stage-msg">The engine runs here, in your browser: the same C++ code as the research engine, compiled to WebAssembly.</p></div></div>
+    <div class="legend" id="legend" hidden></div>
+    <div class="zoom" id="zoom" hidden><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Fit tree" title="Fit">⤢</button></div>
+    <div class="busy-bar" id="busy" hidden></div>
+    <button class="about-btn" id="about" aria-expanded="false" aria-controls="about-panel" aria-label="About"><span class="q" aria-hidden="true">?</span><span class="t">About</span></button>
+    <section class="about-panel" id="about-panel" aria-labelledby="about-title" hidden>
+      <header><h2 id="about-title">About</h2><button class="close" id="about-close" aria-label="Close">×</button></header>
+      <div class="body">
+        <p class="lead">The chromatic polynomial <i>P</i>(<i>G</i>, <i>k</i>) counts the ways to colour a map with <i>k</i> colours so that no two neighbours share one. This page computes it for any country's map, or for a graph you draw, and shows every step of the computation.</p>
+        <h3>How to read the tree</h3>
+        <p><b>Radial</b> puts the root at the centre and one ring per level. <b>Tree</b> reads steps from left to right. Arrow keys move between steps.</p>
+        <h3>Computation of the polynomial</h3>
+        <p>For every graph it meets, the engine tries these steps in order, and the first that applies decides that step of the tree.</p>
+        <ol>
+          <li><b>No edges.</b> A graph with <i>n</i> vertices and no edges has <i>P</i> = <i>k</i><sup><i>n</i></sup>.</li>
+          <li><b>Separate components.</b> If the graph falls apart, each component is solved on its own and their polynomials are multiplied.</li>
+          <li><b>Closed forms.</b> Trees, complete graphs, cycles and wheels have known polynomials, so the branch ends there.</li>
+          <li><b>Decompositions.</b> A graph that is a join of independent parts, or that splits along a clique, is solved piece by piece and the pieces' polynomials are combined.</li>
+          <li><b>Cache.</b> If an earlier branch already solved the same graph with its vertices relabelled, the engine recognises it with nauty and reuses that polynomial.</li>
+          <li><b>Delete–contract.</b> Otherwise the edge selector picks an edge <i>e</i>, and <i>P</i>(<i>G</i>) = <i>P</i>(<i>G</i> − <i>e</i>) − <i>P</i>(<i>G</i> / <i>e</i>): the engine solves the graph with the edge deleted and with its ends merged, starting again from step 1 for each, and stores the result in the cache. The learned and MLP selectors were trained to keep the tree small; the others are classic heuristics.</li>
+        </ol>
+        <p class="fine">The maps come from the <a href="https://github.com/Lizcanutella/world-graphs">world-graphs</a> dataset. Browse and download them on the <a href="../world-graphs/">Adjacency globe</a>.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(async function () {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const DATA = "../world-graphs/";                       // the adjacency globe's data (graphs.json, outlines/, borders/)
+const PUBLISHED = "polynomials.json";         // certified polynomials of the dataset graphs, by graph id
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const cs = getComputedStyle(document.documentElement);
+const C = {};
+for (const k of ["paper", "panel", "ink", "ink-soft", "line", "accent", "accent-bright", "accent-wash", "accent-mid", "ocean",
+                 "graticule", "land", "land-hi", "border", "border-faint", "muted-fill", "k-branch", "k-split", "k-base", "k-cache"])
+  C[k] = cs.getPropertyValue("--" + k).trim();
+const fmt = (x) => Number(x).toLocaleString("en-US");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// ---- step kinds -----------------------------------------------------------------------------------
+// Four roles, each with a colour and a shape: decisions (branch), decompositions, base cases, cache hits.
+const ROLE = {
+  branch: "branch", clique_sep: "split", join: "split", disconnected: "split", complement_sep: "split",
+  base_empty: "base", base_tree: "base", base_complete: "base", base_cycle: "base", base_wheel: "base",
+  cache_hit: "cache", unset: "base",
+};
+const ROLE_STYLE = {
+  branch: { color: C["k-branch"], symbol: d3.symbolCircle, label: "Delete–contract" },
+  split: { color: C["k-split"], symbol: d3.symbolDiamond, label: "Decomposition" },
+  base: { color: C["k-base"], symbol: d3.symbolSquare, label: "Closed form" },
+  cache: { color: C["k-cache"], symbol: d3.symbolCircle, label: "Cache hit" },
+};
+
+// ---- radial palettes ------------------------------------------------------------------------------------
+// The radial view can be coloured by something other than the step type. Every step falls in a colour bin
+// (binsFor): the size gradient has nine, the rest one. Shapes still carry the type.
+// Single-colour palettes tell the types apart by lightness: decisions darkest, closed forms faintest.
+const mono = (bg, fg, soft, line, branch, split, base, dark = false) => ({ bg, fg, soft, ring: soft + "33", dark,
+  line: () => line, lineAlpha: 0.32, fill: (role) => ({ branch, split, base, cache: branch })[role] });
+const ramp = (lo, hi) => d3.quantize(d3.interpolateLab(lo, hi), 9);
+const PALETTES = {
+  kind: { bg: C.paper, fg: C.ink, soft: C["ink-soft"], ring: C.line, line: () => C.border, lineAlpha: 1, dash: true, heavy: true,
+          fill: (role) => ROLE_STYLE[role].color },
+  size: { bg: C.paper, fg: C.ink, soft: C["ink-soft"], ring: C.line, colors: ramp("#d3e2f4", "#0d2b5e"), lineAlpha: 0.6 },
+  ink: mono(C.paper, C.ink, C["ink-soft"], C.ink, "#1a1917", "#6b675f", "#aaa498"),
+  amber: mono(C.paper, "#7c3a06", "#a06a3c", "#b45309", "#7c3a06", "#c2610c", "#e7ad63"),
+  cyanotype: mono("#163a6b", "#f2f6fc", "#a9c1e2", "#e4edf9", "#ffffff", "#bcd2ef", "#7fa3d4", true),
+  sepia: mono("#f3ead8", "#3d2410", "#7a5a3c", "#5b3a1e", "#3d2410", "#7a5230", "#b39068"),
+};
+for (const P of Object.values(PALETTES)) if (P.colors) { P.line = (b) => P.colors[b]; P.fill = (role, b) => P.colors[b]; }
+// Glow: the same palette on a night background, every colour lifted to at least mid lightness and drawn
+// with additive blending, so where lines pile up they brighten instead of turning to grey (paintLayer
+// adds a blurred copy on top as a bloom). Dark palettes keep their hue, darkened.
+const lift = (c) => { const h = d3.hsl(c); if (h.l < 0.62) h.l = 0.62 + 0.15 * h.l; return h.formatHex(); };
+function glowOf(P) {
+  const bg = P.dark ? d3.color(P.bg).darker(1.6).formatHex() : "#0b0d14";
+  const m = (f) => { const memo = new Map(); return (...a) => { const k = a.join(); if (!memo.has(k)) memo.set(k, lift(f(...a))); return memo.get(k); }; };
+  return { ...P, bg, fg: "#f4f1ea", soft: d3.interpolateLab(bg, "#f4f1ea")(0.62), ring: "#ffffff14", dark: true, glow: true, dash: false, heavy: false,
+           line: m(P.line), fill: m(P.fill), lineAlpha: Math.min(0.55, P.lineAlpha * 0.6) };
+}
+function radialPalette() { const P = PALETTES[S.palette]; return S.glow ? (P.glowed ||= glowOf(P)) : P; }
+const binMemo = new WeakMap();
+function binsFor(T, name) {                // {bin: Uint8Array, n, lo, hi} for palette `name` on tree T
+  const memo = binMemo.get(T) || binMemo.set(T, {}).get(T);
+  if (memo[name]) return memo[name];
+  const t = T.t, N = T.N, bin = new Uint8Array(N);
+  let out = { bin, n: 1 };
+  if (name === "size") {
+    // n + m, binned by rank (ninths of the steps), not linearly: small graphs vastly outnumber big ones
+    const val = new Float64Array(N);
+    for (let i = 0; i < N; i++) val[i] = t.n[i] + t.m[i];
+    const sorted = Float64Array.from(val).sort(), cuts = d3.range(1, 9).map((j) => sorted[Math.floor(j * N / 9)]);
+    for (let i = 0; i < N; i++) bin[i] = d3.bisectRight(cuts, val[i]);
+    out = { bin, n: 9, lo: sorted[0], hi: sorted[N - 1], cuts };
+  }
+  return (memo[name] = out);
+}
+
+// ---- data ---------------------------------------------------------------------------------------
+const data = await fetch(DATA + "graphs.json").then((r) => r.json());
+const byId = new Map(data.graphs.map((g) => [g.id, g]));
+const countries = data.graphs.filter((g) => g.kind === "country").sort((a, b) => a.name.localeCompare(b.name));
+const WORLD_NAME = { un195: "The world (UN members + 2)", natural_earth: "The world (every Natural Earth polity)" };
+
+const outlineCache = new Map();
+function outlines(name) {                  // -> Promise<[{parts: [Polygon]}]> in vertex order
+  if (!outlineCache.has(name))
+    outlineCache.set(name, fetch(DATA + "outlines/" + name + ".json").then((r) => r.json()).then((o) =>
+      o.units.map((rings) => {
+        const polys = rings.map((r) => {
+          const pts = [];
+          for (let i = 0; i < r.length; i += 2) pts.push([r[i] / o.q, r[i + 1] / o.q]);
+          return [pts];
+        });
+        for (const p of polys)            // a ring wound the wrong way would fill the globe
+          if (d3.geoArea({ type: "Polygon", coordinates: p }) > 2 * Math.PI) p[0].reverse();
+        const parts = polys.map((p) => {
+          const f = { type: "Polygon", coordinates: p };
+          f.c = d3.geoCentroid(f); f.r = 0;
+          for (const q of p[0]) f.r = Math.max(f.r, d3.geoDistance(f.c, q));
+          return f;
+        });
+        const u = { parts, geo: { type: "MultiPolygon", coordinates: polys } };
+        u.c = d3.geoCentroid(u.geo); u.r = 0;
+        for (const f of parts) u.r = Math.max(u.r, d3.geoDistance(u.c, f.c) + f.r);
+        return u;
+      })));
+  return outlineCache.get(name);
+}
+
+// ---- engine (WebAssembly, in a worker) ----------------------------------------------------------
+let worker = null, jobId = 0;
+const pending = new Map();
+let onProgress = null;
+function startWorker() {
+  worker = new Worker("engine/worker.js");
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.progress) { if (onProgress) onProgress(m.progress); return; }
+    const p = pending.get(m.id);
+    if (!p) return;
+    pending.delete(m.id);
+    m.error ? p.reject(new Error(m.error)) : p.resolve(m.result);
+  };
+  worker.onerror = (e) => { for (const p of pending.values()) p.reject(new Error(e.message || "engine failed to load")); pending.clear(); };
+}
+function ask(msg) {
+  if (!worker) startWorker();
+  return new Promise((resolve, reject) => { const id = ++jobId; pending.set(id, { resolve, reject }); worker.postMessage({ id, ...msg }); });
+}
+function stopEngine() {                    // the engine can't be interrupted from inside: drop the worker
+  if (worker) worker.terminate();
+  worker = null;
+  for (const p of pending.values()) p.reject(new Error("stopped"));
+  pending.clear();
+}
+
+// ---- state ----------------------------------------------------------------------------------------
+const S = {
+  graph: null,          // {key, id, kind, name, n, edges, nodes?, pos?, geo}
+  run: null,            // engine result for S.graph
+  T: null,              // tree model of S.run
+  sel: -1,              // selected step
+  open: new Set(),      // expanded steps
+  heavy: new Set(),     // steps on the heaviest root path
+  unfolds: [],          // cache hits whose reused subtree is replayed under them (see buildTree)
+  view: "radial",       // "radial" (every step, around the root) or "tree" (expandable, left to right)
+  palette: "size",      // radial colours, a key of PALETTES
+  glow: false,          // radial: dark background, additive light
+  hideLabels: false,    // radial: no depth labels on the rings
+  selector: "learned", cache: true, scores: false,
+  history: new Map(),   // graph key -> [runs]
+  busy: false,
+};
+
+// ---- the polynomial ---------------------------------------------------------------------------------
+function polyHtml(coeffs) {                // ascending decimal strings -> "k³³ − 73k³² + …"
+  const sup = (e) => e > 1 ? `<sup>${e}</sup>` : "";
+  // lines break only between terms: digits are grouped by narrow no-break spaces, and a sign stays with its term
+  const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  let out = "";
+  for (let i = coeffs.length - 1; i >= 0; i--) {
+    const c = BigInt(coeffs[i]);
+    if (c === 0n) continue;
+    const neg = c < 0n, mag = neg ? -c : c;
+    const body = i === 0 ? group(mag.toString()) : (mag === 1n ? "" : group(mag.toString())) + `<i>k</i>${sup(i)}`;
+    out += out ? ` <span class="term" data-sign="${neg ? "−" : "+"}">${neg ? "−" : "+"} ${body}</span>`
+               : `<span class="term">${neg ? "−" : ""}${body}</span>`;
+  }
+  return out || "0";
+}
+function polyTex(coeffs) {                 // ascending decimal strings -> "P(G, k) = k^{33} - 73k^{32} + \dots"
+  let out = "";
+  for (let i = coeffs.length - 1; i >= 0; i--) {
+    const c = BigInt(coeffs[i]);
+    if (c === 0n) continue;
+    const neg = c < 0n, mag = neg ? -c : c;
+    const body = i === 0 ? mag.toString() : (mag === 1n ? "" : mag.toString()) + (i > 1 ? `k^{${i}}` : "k");
+    out += out ? ` ${neg ? "-" : "+"} ${body}` : (neg ? "-" : "") + body;
+  }
+  return `P(G, k) = ${out || "0"}`;
+}
+const evalPoly = (coeffs, k) => coeffs.reduceRight((acc, c) => acc * BigInt(k) + BigInt(c), 0n);
+function chromaticNumber(coeffs) {         // the smallest k with P(G, k) > 0
+  for (let k = 1; k <= coeffs.length; k++) if (evalPoly(coeffs, k) > 0n) return k;
+  return null;
+}
+
+let publishedAll = null;
+function published(g) {                    // certified polynomial of a dataset graph, if listed
+  if (!g.id || g.kind === "drawn") return Promise.resolve(null);
+  publishedAll ??= fetch(PUBLISHED).then((r) => r.ok ? r.json() : null).catch(() => null);
+  return publishedAll.then((j) => j && j.polynomials[g.id] || null);
+}
+
+function renderHero() {
+  const g = S.graph;
+  if (!g) return;
+  const what = g.kind === "world" ? "Countries"
+    : g.kind === "drawn" ? "Your graph" : (g.level ? g.level[0].toUpperCase() + g.level.slice(1) : "Subdivisions");
+  const size = `${fmt(g.n)} ${g.n === 1 ? "vertex" : "vertices"}, ${fmt(g.edges.length)} ${g.edges.length === 1 ? "edge" : "edges"}`;
+  $("eyebrow").textContent = g.kind === "drawn" ? `(${size})` : `${what} (${size})`;
+  $("title").textContent = g.name;
+  const r = S.run;
+  const poly = $("poly");
+  if (!r) {
+    poly.innerHTML = `<span class="lhs"><i>P</i>(<i>G</i>, <i>k</i>) =</span> <span>${S.busy ? "computing…" : "not computed yet"}</span>`;
+    $("poly-actions").hidden = true; $("facts").innerHTML = "";
+    return;
+  }
+  poly.classList.remove("open"); $("poly-more").setAttribute("aria-pressed", "false");
+  poly.innerHTML = `<span class="lhs"><i>P</i>(<i>G</i>, <i>k</i>) =</span> ${polyHtml(r.poly)}`;
+  $("poly-actions").hidden = false; $("copy-tex").textContent = "Copy polynomial to clipboard";
+  fitPoly();
+  const chi = chromaticNumber(r.poly);
+  const stat = (k, v, title) => `<div${title ? ` title="${esc(title)}"` : ""}><dt>${k}</dt><dd>${v}</dd></div>`;
+  const html = (chi ? stat("<i>χ</i>", chi, "chromatic number: the smallest k with P(G, k) > 0") : "")
+    + stat("time", r.ms < 1000 ? Math.round(r.ms) + " ms" : (r.ms / 1000).toFixed(1) + " s", "wall time in this browser")
+    + stat("steps", fmt(r.stats.nodes), "nodes of the decomposition tree")
+    + stat("branching decisions", fmt(r.stats.branches), "delete–contract branchings, each on an edge picked by the edge selector")
+    + (S.cache ? stat("cache hits", fmt(r.stats.hits)) : "")
+    + (r.stats.hits ? stat("steps saved by cache", bigCount(reuseOf(r).saved), "replaying every reused subtree in place would add this many steps") : "");
+  $("facts").innerHTML = html;
+  if (SHOW_PUBCHECK) pubCheck(g, r);
+}
+// Compares the result with the certified polynomial in polynomials.json and says whether they match. Off on the
+// website (SHOW_PUBCHECK); kept for checking the wasm engine against the dataset.
+const SHOW_PUBCHECK = false;
+function pubCheck(g, r) {
+  $("facts").insertAdjacentHTML("beforeend", `<div id="pubcheck"></div>`);
+  const key = g.key;
+  published(g).then((pub) => {
+    if (!pub || S.graph.key !== key || !$("pubcheck")) return;
+    const same = pub.length === r.poly.length && pub.every((c, i) => c === r.poly[i]);
+    $("pubcheck").innerHTML = same
+      ? `<dd class="ok" title="identical to the certified polynomial in polynomials.json">✓ matches the published polynomial</dd>`
+      : `<dd class="bad">✗ differs from the published polynomial</dd>`;
+  });
+}
+// Collapsed, the polynomial shows the terms that fit on one line and ends in "+ …" or "− …", the sign of
+// the first term left out.
+function fitPoly() {
+  const poly = $("poly"), terms = Array.from(poly.querySelectorAll(".term"));
+  poly.querySelector(".tail")?.remove();
+  for (const t of terms) t.hidden = false;
+  if (!terms.length) return;
+  const open = poly.classList.contains("open"), top = terms[0].offsetTop + 2;
+  let j = terms.findIndex((t) => t.offsetTop > top);
+  $("poly-more").hidden = !open && j < 0;   // nothing to expand
+  if (open || j < 0) return;
+  for (let i = j; i < terms.length; i++) terms[i].hidden = true;
+  const tail = document.createElement("span");
+  tail.className = "tail";
+  poly.append(" ", tail);
+  for (;;) {
+    tail.textContent = terms[j].dataset.sign + " …";
+    if (tail.offsetTop <= top || j <= 1) break;
+    terms[--j].hidden = true;
+  }
+}
+new ResizeObserver(() => fitPoly()).observe($("poly"));
+document.fonts?.ready.then(() => fitPoly());
+$("poly-more").addEventListener("click", () => {
+  const open = $("poly").classList.toggle("open");
+  $("poly-more").setAttribute("aria-pressed", open);
+  fitPoly();
+});
+$("copy-tex").addEventListener("click", async () => {
+  const b = $("copy-tex");
+  try { await navigator.clipboard.writeText(polyTex(S.run.poly)); b.textContent = "Copied"; }
+  catch (e) { b.textContent = "Couldn’t copy"; }
+  setTimeout(() => { b.textContent = "Copy polynomial to clipboard"; }, 1600);
+});
+
+function renderHistory() {
+  const runs = S.graph ? S.history.get(S.graph.key) || [] : [];
+  const label = { learned: "Learned", mlp: "MLP", min_degree_sum: "Min deg-sum", max_degree_sum: "Max deg-sum",
+                  mindeg: "Min degree", vorder: "Vertex order", monagan: "Monagan" };
+  $("history").innerHTML = runs.length > 1 ? runs.map((h, i) =>
+    `<button data-i="${i}" aria-current="${h.result === S.run}" title="${fmt(h.result.stats.branches)} decisions">${label[h.selector]}${h.cache ? "" : " (no cache)"}: ${fmt(h.result.stats.nodes)} steps</button>`).join("") : "";
+}
+$("history").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const h = S.history.get(S.graph.key)[+b.dataset.i];
+  S.selector = h.selector; S.cache = h.cache; syncControls();
+  setRun(h.result);
+});
+
+// ---- running ----------------------------------------------------------------------------------------
+function status(html) { $("status").innerHTML = html || ""; }
+function setBusy(b) {
+  S.busy = b;
+  $("busy").hidden = !b; $("stop").hidden = !b; $("compute").hidden = b;
+}
+async function compute() {
+  const g = S.graph;
+  if (!g || !g.n) { status("Draw a graph first."); return; }
+  if (S.busy) stopEngine();
+  const key = g.key, selector = S.selector, cache = S.cache;
+  setBusy(true);
+  S.run = null; S.T = null; S.sel = -1; renderHero(); renderTree(); renderStep();
+  $("stage-msg").textContent = "Computing…";
+  const t0 = performance.now();
+  status("Starting the engine…");
+  let lastProgress = null;
+  const tick = setInterval(() => { if (S.busy && !lastProgress) status(`Computing… ${((performance.now() - t0) / 1000).toFixed(0)} s`); }, 1000);
+  onProgress = ([nodes, branches]) => {
+    lastProgress = nodes;
+    status(`Computing… ${fmt(nodes)} steps / ${fmt(branches)} decisions / ${((performance.now() - t0) / 1000).toFixed(0)} s`);
+  };
+  try {
+    const r = await ask({ op: "compute", n: g.n, edges: g.edges, selector, cache, budget: -1 });
+    if (S.graph.key !== key) return;
+    if (!r.ok) throw new Error(r.error === "budget" ? "over the branch budget" : r.error);
+    const runs = S.history.get(key) || [];
+    const prev = runs.findIndex((h) => h.selector === selector && h.cache === cache);
+    if (prev >= 0) runs.splice(prev, 1);
+    runs.push({ selector, cache, result: r });
+    S.history.set(key, runs);
+    status("");
+    setRun(r);
+  } catch (err) {
+    if (S.graph.key !== key) return;
+    const msg = err.message === "stopped" ? "Stopped." :
+      /memory|bounds|unreachable/i.test(err.message) ? "The browser ran out of memory for this tree. Try the cache, or a smaller graph." : err.message;
+    status(`<span class="err">${esc(msg)}</span>`);
+    $("stage-msg").textContent = err.message === "stopped" ? "Stopped. Press Compute to run again." : "No tree for this run.";
+  } finally {
+    clearInterval(tick); onProgress = null;
+    if (S.graph.key === key) setBusy(false);
+  }
+}
+$("compute").addEventListener("click", compute);
+$("stop").addEventListener("click", () => { stopEngine(); });
+
+function syncControls() {
+  $("selector").value = S.selector;
+  $("t-cache").setAttribute("aria-pressed", S.cache);
+}
+$("selector").addEventListener("change", (e) => { S.selector = e.target.value; syncControls(); offerRerun(); });
+$("t-cache").addEventListener("click", () => { S.cache = !S.cache; syncControls(); offerRerun(); });
+function offerRerun() {                    // a finished run for these settings is shown at once; otherwise run small graphs
+  const h = S.graph && (S.history.get(S.graph.key) || []).find((x) => x.selector === S.selector && x.cache === S.cache);
+  if (h) { setRun(h.result); return; }
+  if (S.graph && autoRun(S.graph)) compute();
+  else status("Settings changed. Press Compute to run.");
+}
+const autoRun = (g) => g.kind === "country" && g.n <= 60;   // drawn graphs wait for Compute
+
+// ---- tree model ----------------------------------------------------------------------------------
+// A cache hit can be unfolded: the subtree of the step that first solved its graph is replayed under
+// it as extra ("virtual") steps, appended after the engine's own ids. `unfolds` lists the hosts in the
+// order they were unfolded; a host may itself be a replayed hit. Steps below N0 are the engine's.
+function buildTree(r, unfolds = []) {
+  const base = r.trace, N0 = base.parent.length, real = [], entries = [];
+  const realOf = (i) => i < N0 ? i : real[i - N0];
+  let N = N0;
+  for (const host of unfolds) {
+    const origin = base.extra[realOf(host)].origin, count = base.sn[origin] - 1;
+    entries.push({ host, origin, base: N, count });
+    for (let j = origin + 1; j < origin + base.sn[origin]; j++) real.push(j);
+    N += count;
+  }
+  let t = base;
+  if (entries.length) {
+    t = { kinds: base.kinds, vias: base.vias, extra: Object.assign({}, base.extra) };
+    for (const k of ["parent", "via", "kind", "n", "m", "u", "v"]) { t[k] = new Int32Array(N); t[k].set(base[k]); }
+    for (const k of ["sb", "sn"]) { t[k] = new Float64Array(N); t[k].set(base[k]); }
+    for (const e of entries) {
+      for (let v = e.base; v < e.base + e.count; v++) {
+        const j = real[v - N0];
+        for (const k of ["via", "kind", "n", "m", "u", "v", "sb", "sn"]) t[k][v] = base[k][j];
+        t.parent[v] = base.parent[j] === e.origin ? e.host : e.base + base.parent[j] - e.origin - 1;
+        if (base.extra[j]) t.extra[v] = base.extra[j];
+      }
+      for (let a = e.host; a >= 0; a = t.parent[a]) { t.sn[a] += e.count; t.sb[a] += base.sb[e.origin]; }
+    }
+  }
+  const count = new Int32Array(N + 1);
+  for (let i = 1; i < N; i++) count[t.parent[i] + 1]++;
+  for (let i = 0; i < N; i++) count[i + 1] += count[i];
+  const start = count.slice(), kids = new Int32Array(Math.max(1, N - 1)), fill = count.slice();
+  for (let i = 1; i < N; i++) kids[fill[t.parent[i]]++] = i;   // ids ascend, so children keep engine order
+  const depth = new Int32Array(N);
+  for (let i = 1; i < N; i++) depth[i] = depth[t.parent[i]] + 1;
+  const children = (i) => kids.subarray(start[i], start[i + 1]);
+  const heaviest = (i) => { let b = -1; for (const c of children(i)) if (b < 0 || t.sn[c] > t.sn[b]) b = c; return b; };
+  const entryAt = (i) => {                 // entries' bases ascend, so binary search
+    let lo = 0, hi = entries.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, e = entries[mid];
+      if (i < e.base) hi = mid - 1; else if (i >= e.base + e.count) lo = mid + 1; else return e;
+    }
+    return null;
+  };
+  return { t, N, N0, children, heaviest, depth, kind: (i) => t.kinds[t.kind[i]], via: (i) => t.vias[t.via[i]],
+           realOf, entries, entryAt, unfoldOf: new Map(entries.map((e) => [e.host, e])) };
+}
+
+// What the cache saved. U[i] is the size step i's subtree would have with every reuse below it
+// unfolded (a hit counts as the whole subtree it reuses), so a hit saves U[origin] − 1 steps.
+// Ids are preorder, so step i's subtree is i … i + sn[i] − 1; finishing steps in order of their
+// subtree's last id (deeper first on ties) finishes children before parents and origins before hits.
+function reuseOf(r) {
+  if (r.reuse) return r.reuse;
+  const t = r.trace, N = t.parent.length, U = new Float64Array(N).fill(1), hitsOf = new Map();
+  const end = (i) => i + t.sn[i] - 1;
+  const order = Int32Array.from({ length: N }, (_, i) => i).sort((a, b) => end(a) - end(b) || b - a);
+  for (const i of order) {
+    const x = t.extra[i];
+    if (x && x.origin !== undefined) {
+      U[i] = U[x.origin];
+      if (!hitsOf.has(x.origin)) hitsOf.set(x.origin, []);
+      hitsOf.get(x.origin).push(i);
+    }
+    if (i) U[t.parent[i]] += U[i];
+  }
+  for (const hs of hitsOf.values()) hs.sort((a, b) => a - b);
+  return (r.reuse = { U, hitsOf, saved: U[0] - N });
+}
+const reusedFrom = (i) => S.T.kind(i) === "cache_hit" ? S.T.t.extra[i].origin : -1;
+function reusePairs(i) {                   // [hit, origin] pairs to draw for the selected step
+  const T = S.T;
+  if (!T || i < 0) return [];
+  if (T.kind(i) === "cache_hit") return [[i, reusedFrom(i)]];
+  return i < T.N0 ? (reuseOf(S.run).hitsOf.get(i) || []).map((h) => [h, i]) : [];
+}
+function bigCount(x) {                     // exact below a trillion, then 3.41 × 10¹⁴
+  if (x < 1e12) return fmt(Math.round(x));
+  const e = Math.floor(Math.log10(x));
+  return `${(x / 10 ** e).toFixed(2)} × 10<sup>${e}</sup>`;
+}
+
+function rebuildTree() { S.T = buildTree(S.run, S.unfolds); renderTree(); renderStep(); dirty = true; }
+function unfold(h) {
+  S.unfolds.push(h); S.open.add(h);
+  S.T = buildTree(S.run, S.unfolds);
+  const e = S.T.unfoldOf.get(h);
+  if (e.count <= 80) for (let v = e.base; v < e.base + e.count; v++) S.open.add(v);   // a small replay opens whole
+  renderTree(); renderStep(); dirty = true;
+}
+// Unfolds every cache hit, then every hit inside those replays, until none is left: the tree the
+// engine would have built with no cache. Allowed only while that tree stays drawable.
+// The lever is on by default, so every run that fits is shown unfolded; China's 400,608 steps take ~1.5 s.
+const UNFOLD_ALL_MAX = 500000;
+let unfoldPref = true;
+try { unfoldPref = localStorage.getItem("chromatic-unfold") !== "0"; } catch (e) {}
+function unfoldEverything() {
+  let T = S.T;
+  for (;;) {
+    const add = [];
+    for (let i = 0; i < T.N; i++) if (T.kind(i) === "cache_hit" && !T.unfoldOf.has(i)) add.push(i);
+    if (!add.length) break;
+    S.unfolds.push(...add);
+    T = buildTree(S.run, S.unfolds);
+  }
+  return T;
+}
+function unfoldAll() { S.T = unfoldEverything(); renderTree(); renderStep(); dirty = true; }
+function foldAll() {
+  const T = S.T;
+  let sel = S.sel;
+  while (sel >= T.N0) sel = T.entryAt(sel).host;
+  S.unfolds = []; S.sel = sel;
+  S.open = new Set([...S.open].filter((i) => i < T.N0));
+  rebuildTree();
+}
+function renderUnfoldAll() {
+  const b = $("unfold-all"), T = S.T, r = S.run;
+  b.hidden = !T || !r.stats.hits;
+  if (b.hidden) return;
+  const full = reuseOf(r).U[0], all = T.N >= full;
+  b.setAttribute("aria-pressed", all);
+  b.disabled = !all && full > UNFOLD_ALL_MAX;
+  b.title = all ? "Every cached subtree is replayed in place. Turn off for the tree the engine built"
+    : b.disabled ? `With every reuse unfolded the tree would have ${full >= 1e12 ? "about " + full.toExponential(1) : fmt(full)} steps, too many to draw`
+    : `Replay every cached subtree in place: ${fmt(full)} steps, the tree without a cache`;
+}
+function fold(h) {                         // drops h's replay and every replay unfolded inside it; later ids shift down
+  const T = S.T, gone = [];
+  for (const e of T.entries)
+    if (e.host === h || gone.some((g) => e.host >= g.base && e.host < g.base + g.count)) gone.push(e);
+  const remap = (i) => {
+    if (i < T.N0) return i;
+    const e = T.entryAt(i);
+    if (!e || gone.includes(e)) return -1;
+    return i - gone.filter((g) => g.base < e.base).reduce((s, g) => s + g.count, 0);
+  };
+  S.unfolds = T.entries.filter((e) => !gone.includes(e)).map((e) => remap(e.host));
+  S.open = new Set([...S.open].map(remap).filter((i) => i >= 0));
+  const sel = remap(S.sel);
+  S.sel = sel >= 0 ? sel : remap(h);
+  rebuildTree();
+}
+
+// Replays a step's graph from the root, as python/chromatic_explorer/replay.py does: each record
+// derives from its parent by its `via` op, and verts[i] is the set of root vertices local vertex i stands for.
+function replay(id) {
+  const T = S.T, t = T.t, path = [];
+  for (let i = id; i >= 0; i = t.parent[i]) path.push(i);
+  let edges = null, verts = null;
+  for (let p = path.length - 1; p >= 0; p--) {
+    const i = path[p], via = T.via(i), x = t.extra[i] || {};
+    if (via === "root") {
+      edges = S.graph.edges.map(([a, b]) => a < b ? [a, b] : [b, a]);
+      verts = Array.from({ length: S.graph.n }, (_, v) => [v]);
+    } else if (via === "delete" || via === "insert" || via === "contract") {
+      let par = t.parent[i];
+      if (T.kind(par) === "cache_hit") {   // into a replay: relabel the hit's graph as the step it reuses, then follow that step
+        const { origin, iso } = t.extra[par];
+        edges = edges.map(([p, q]) => iso[p] < iso[q] ? [iso[p], iso[q]] : [iso[q], iso[p]]);
+        if (verts) { const nv = []; verts.forEach((set, v) => { nv[iso[v]] = set; }); verts = nv; }
+        par = origin;
+      }
+      const a = Math.min(t.u[par], t.v[par]), b = Math.max(t.u[par], t.v[par]);
+      if (via === "delete") edges = edges.filter((e) => e[0] !== a || e[1] !== b);
+      else if (via === "insert") edges = edges.concat([[a, b]]);
+      else {                               // b merges into a; labels above b shift down
+        const re = (x) => { const y = x === b ? a : x; return y < b ? y : y - 1; };
+        const seen = new Set(), out = [];
+        for (const [x, y] of edges) {
+          const rx = re(x), ry = re(y);
+          if (rx === ry) continue;
+          const e = rx < ry ? [rx, ry] : [ry, rx], k = e[0] * 100003 + e[1];
+          if (!seen.has(k)) { seen.add(k); out.push(e); }
+        }
+        edges = out;
+        if (verts) verts = verts.flatMap((s, v) => v === b ? [] : v === a ? [s.concat(verts[b])] : [s]);
+      }
+    } else if (via === "piece") {
+      const idx = new Map(x.verts.map((v, j) => [v, j]));
+      edges = edges.filter(([u, v]) => idx.has(u) && idx.has(v)).map(([u, v]) => {
+        const a = idx.get(u), b = idx.get(v); return a < b ? [a, b] : [b, a]; });
+      verts = verts ? x.verts.map((v) => verts[v]) : null;
+    } else {                               // ie_piece: synthetic graph, identity not tracked
+      edges = x.edges.map(([u, v]) => u < v ? [u, v] : [v, u]); verts = null;
+    }
+  }
+  edges.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const n = verts ? verts.length : t.n[id];
+  if (n !== t.n[id] || edges.length !== t.m[id]) throw new Error(`replay mismatch at step ${id}`);
+  return { n, edges, verts };
+}
+
+function setRun(r) {
+  S.run = r; S.unfolds = []; S.T = buildTree(r); S.sel = 0;
+  reuseOf(r);
+  const T = S.T;
+  S.heavy = new Set();
+  for (let i = 0; i >= 0; i = T.heaviest(i)) S.heavy.add(i);
+  // open the costliest steps first until about 160 are visible
+  S.open = new Set();
+  const frontier = [0];
+  let visible = 1;
+  while (frontier.length && visible < 160) {
+    let bi = 0;
+    for (let j = 1; j < frontier.length; j++) if (T.t.sn[frontier[j]] > T.t.sn[frontier[bi]]) bi = j;
+    const i = frontier.splice(bi, 1)[0], ks = T.children(i);
+    if (!ks.length) continue;
+    S.open.add(i); visible += ks.length; frontier.push(...ks);
+  }
+  const full = reuseOf(r).U[0];
+  if (unfoldPref && full > T.N && full <= UNFOLD_ALL_MAX) S.T = unfoldEverything();
+  zoomFit = true;
+  renderHero(); renderHistory(); renderTree(); renderStep(); dirty = true;
+}
+
+// ---- tree view --------------------------------------------------------------------------------------
+const tree = d3.select("#tree");
+const treeG = tree.append("g");
+let zoomFit = true, layoutNodes = [], layoutById = new Map();
+const zoom = d3.zoom().scaleExtent([0.03, 3]).on("zoom", (e) => treeG.attr("transform", e.transform).classed("far", e.transform.k < 0.75));
+tree.call(zoom).on("dblclick.zoom", null);
+const DX = 20, DY = 96;
+
+function nodeR(i) { return Math.min(13, 3.2 + 1.35 * Math.log2(1 + S.T.t.sn[i])); }
+function renderTree() {
+  const T = S.T, has = !!T;
+  $("stage-top").hidden = !has; $("legend").hidden = !has; $("zoom").hidden = !has; $("stage-empty").hidden = has;
+  renderUnfoldAll();
+  treeG.selectAll("*").remove();
+  if (!has) { RL = null; drawRadial(); return; }
+  renderLegend();
+  if (S.view === "radial") {
+    if (!RL || RL.T !== T || RL.style !== radialStyle()) {
+      const fresh = !RL || RL.run !== S.run;   // unfolding a replay or restyling relays the tree out but keeps the view
+      RL = radialLayout();
+      if (fresh) fitRadial(false); else radialDirty();
+    }
+    else radialDirty();
+    return;
+  }
+  const root = d3.hierarchy(0, (i) => S.open.has(i) ? Array.from(T.children(i)) : null);
+  d3.tree().nodeSize([DX, DY]).separation((a, b) => a.parent === b.parent ? 1 : 1.25)(root);
+  layoutNodes = root.descendants();
+  layoutById = new Map(layoutNodes.map((d) => [d.data, d]));
+  const link = d3.linkHorizontal().x((d) => d.y).y((d) => d.x);
+  treeG.append("g").selectAll("path").data(root.links()).join("path")
+    .attr("class", (d) => "link " + (T.via(d.target.data) === "contract" ? "contract " : "") + (S.heavy.has(d.target.data) ? "heavy " : "") + (d.target.data >= T.N0 ? "virtual" : ""))
+    .attr("d", link);
+  const node = treeG.append("g").selectAll("g").data(layoutNodes).join("g")
+    .attr("class", (d) => "node " + ROLE[T.kind(d.data)] + (d.data >= T.N0 ? " virtual" : ""))
+    .attr("transform", (d) => `translate(${d.y},${d.x})`)
+    .on("click", (e, d) => { e.stopPropagation(); selectStep(d.data, true); })
+    .on("mousemove", (e, d) => showTip(e, stepTip(d.data)))
+    .on("mouseleave", hideTip);
+  node.append("circle").attr("r", (d) => nodeR(d.data) + 6).attr("fill", "transparent");   // generous hit target
+  node.append("path")
+    .attr("d", (d) => d3.symbol(ROLE_STYLE[ROLE[T.kind(d.data)]].symbol, Math.PI * nodeR(d.data) ** 2)())
+    .attr("fill", (d) => ROLE_STYLE[ROLE[T.kind(d.data)]].color);
+  node.filter((d) => !S.open.has(d.data) && T.children(d.data).length)
+    .append("text").attr("class", "more").attr("x", (d) => nodeR(d.data) + 4).attr("dy", "0.35em")
+    .text((d) => "+" + fmt(T.t.sn[d.data] - 1));
+  node.filter((d) => d.data !== 0 && d.parent && d.parent.children.length > 1 && T.via(d.data) !== "piece" && T.via(d.data) !== "ie_piece")
+    .append("text").attr("class", "vlabel").attr("x", (d) => -nodeR(d.data) - 4).attr("y", -6).attr("text-anchor", "end")
+    .text((d) => ({ delete: "G − e", contract: "G / e", insert: "G + e" })[T.via(d.data)] || "");
+  paintSelection();
+  if (zoomFit) { zoomFit = false; fitTree(false); }
+}
+function paintSelection() {
+  if (S.view === "radial") { radialDirty(); return; }
+  treeG.selectAll(".halo, .reuse-arc").remove();
+  for (const [h, o] of reusePairs(S.sel)) {   // dashed arcs from a cache hit to the step it reuses
+    const a = layoutById.get(h), b = layoutById.get(o);
+    if (!a || !b) continue;
+    const x1 = a.y, y1 = a.x, x2 = b.y, y2 = b.x, k = 0.22;
+    treeG.append("path").attr("class", "reuse-arc")
+      .attr("d", `M${x1},${y1}Q${(x1 + x2) / 2 - (y2 - y1) * k},${(y1 + y2) / 2 + (x2 - x1) * k} ${x2},${y2}`);
+  }
+  const d = layoutById.get(S.sel);
+  if (!d) return;
+  treeG.append("circle").attr("class", "halo").attr("cx", d.y).attr("cy", d.x).attr("r", nodeR(d.data) + 4.5)
+    .style("fill", "none").style("stroke", C.ink).style("stroke-width", 1.6).style("pointer-events", "none");
+}
+// The part of the stage the drawing may use: right of the controls column (below them on phones,
+// where they wrap into rows), above the legend. [x0, y0, x1, y1] in CSS px.
+function stageArea(W, H) {
+  const st = $("stage").getBoundingClientRect(), c = $("stage-top").getBoundingClientRect();
+  const bottom = H - Math.max(56, $("legend").offsetHeight + 24), ap = $("about-panel");
+  const right = !ap.hidden && ap.offsetWidth < W - 200 ? ap.getBoundingClientRect().left - st.left - 24 : W - 24;
+  return getComputedStyle($("stage-top")).flexDirection === "column"
+    ? [c.right - st.left + 24, 24, right, bottom] : [24, c.bottom - st.top + 16, right, bottom];
+}
+function fitTree(animate) {
+  if (S.view === "radial") { fitRadial(animate); return; }
+  const box = treeG.node().getBBox(), W = tree.node().clientWidth, H = tree.node().clientHeight;
+  if (!box.width && !box.height) return;
+  const [x0, y0, x1, y1] = stageArea(W, H);
+  let k = Math.min(1.1, (x1 - x0) / (box.width || 1), (y1 - y0) / (box.height || 1));
+  let tx = x0 - box.x * k + Math.max(0, (x1 - x0 - box.width * k) / 2);
+  let ty = y0 - box.y * k + Math.max(0, (y1 - y0 - box.height * k) / 2);
+  if (W < 700 && k < 0.45) { k = 0.45; tx = x0; ty = y0 + (y1 - y0) / 2; }   // phones: legible, root at the left, pan for the rest
+  (animate && !reduce ? tree.transition().duration(450) : tree).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+}
+function revealStep(id) {                  // pan so the selected step is on screen, keeping the zoom
+  if (S.view === "radial") { revealRadial(id); return; }
+  const d = layoutById.get(id);
+  if (!d) return;
+  const t = d3.zoomTransform(tree.node()), W = tree.node().clientWidth, H = tree.node().clientHeight;
+  const [sx, sy] = t.apply([d.y, d.x]);
+  if (sx > 40 && sx < W - 40 && sy > 70 && sy < H - 60) return;
+  (reduce ? tree : tree.transition().duration(350)).call(zoom.translateTo, d.y, d.x);
+}
+function renderLegend() {
+  const T = S.T, roles = new Set();
+  for (let i = 0; i < T.N; i++) roles.add(ROLE[T.kind(i)]);
+  const sym = (r) => {
+    const st = ROLE_STYLE[r];
+    const fill = r === "cache" ? P.bg : st.color, stroke = r === "cache" ? st.color : "none";
+    return `<svg width="12" height="12" viewBox="-6 -6 12 12"><path d="${d3.symbol(st.symbol, 30)()}" fill="${fill}" stroke="${stroke}" stroke-width="1.6"/></svg>`;
+  };
+  const P = S.view === "radial" ? radialPalette() : PALETTES.kind;
+  $("stage").classList.toggle("dark", S.view === "radial" && !!P.dark);
+  $("stage").style.setProperty("--scene", P.bg);
+  if (S.view === "radial" && S.palette !== "kind") {               // radial palettes: what the colour means, then the shapes in plain ink
+    const shape = (r) => {
+      const st = ROLE_STYLE[r], ink = P.colors ? C["ink-soft"] : P.fill(r) === P.bg ? P.fg : P.fill(r), hollow = r === "cache";
+      return `<svg width="12" height="12" viewBox="-6 -6 12 12"><path d="${d3.symbol(st.symbol, 30)()}" fill="${hollow ? P.bg : ink}" stroke="${hollow ? ink : "none"}" stroke-width="1.6"/></svg>`;
+    };
+    const B = binsFor(T, S.palette);
+    const head = P.colors ? `<span>vertices + edges, by rank ${fmt(B.lo)}<svg class="ramp" viewBox="0 0 9 1" preserveAspectRatio="none">${P.colors.map((c, j) => `<rect x="${j}" width="1.02" height="1" fill="${P.line(j)}"/>`).join("")}</svg>${fmt(B.hi)}</span>` : "";
+    $("legend").innerHTML = head + ["branch", "split", "base", "cache"].filter((r) => roles.has(r)).map((r) => `<span>${shape(r)}${ROLE_STYLE[r].label}</span>`).join("")
+      + (roles.has("cache") ? `<span><svg width="22" height="8"><path d="M0,7Q11,-3 22,7" fill="none" stroke="${C["k-cache"]}" stroke-width="1.6" stroke-dasharray="4 3"/></svg>reused from</span>` : "");
+    return;
+  }
+  $("legend").innerHTML = ["branch", "split", "base", "cache"].filter((r) => roles.has(r))
+    .map((r) => `<span>${sym(r)}${ROLE_STYLE[r].label}</span>`).join("")
+    + (P.dash ? `<span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="${C.border}" stroke-dasharray="3 3"/></svg>contraction</span>` : "")
+    + (P.heavy ? `<span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="${C.accent}" stroke-width="2"/></svg>heaviest path</span>` : "")
+    + (roles.has("cache") ? `<span><svg width="22" height="8"><path d="M0,7Q11,-3 22,7" fill="none" stroke="${C["k-cache"]}" stroke-width="1.6" stroke-dasharray="4 3"/></svg>reused from</span>` : "")
+    + (S.view === "radial" ? "" : `<span>size ∝ log steps below</span>`);
+}
+const zoomStep = (f) => S.view === "radial" ? radSel.transition().duration(reduce ? 0 : 200).call(rzoom.scaleBy, f)
+                                             : tree.transition().duration(reduce ? 0 : 200).call(zoom.scaleBy, f);
+$("zin").addEventListener("click", () => zoomStep(1.5));
+$("zout").addEventListener("click", () => zoomStep(1 / 1.5));
+$("zfit").addEventListener("click", () => fitTree(true));
+$("unfold-all").addEventListener("click", () => {
+  unfoldPref = S.T.N < reuseOf(S.run).U[0];
+  try { localStorage.setItem("chromatic-unfold", unfoldPref ? "1" : "0"); } catch (e) {}
+  unfoldPref ? unfoldAll() : foldAll();
+});
+$("collapse").addEventListener("click", () => {
+  S.open = new Set([0]); renderTree(); selectStep(0, false); fitTree(true);
+});
+function treeKeys(e) {
+  const T = S.T;
+  if (!T || S.sel < 0) return;
+  const p = T.t.parent[S.sel], sibs = p >= 0 ? Array.from(T.children(p)) : [0], at = sibs.indexOf(S.sel);
+  let next = -1;
+  if (e.key === "ArrowLeft") next = p;
+  else if (e.key === "ArrowRight") { next = T.heaviest(S.sel); if (next >= 0) S.open.add(S.sel); }
+  else if (e.key === "ArrowUp") next = sibs[at - 1] ?? -1;
+  else if (e.key === "ArrowDown") next = sibs[at + 1] ?? -1;
+  else return;
+  e.preventDefault();
+  if (next >= 0) { if (e.key === "ArrowRight") renderTree(); selectStep(next, false); revealStep(next); }
+}
+tree.on("keydown", treeKeys);
+
+// ---- radial view -------------------------------------------------------------------------------------
+// Every step is drawn. The root sits at the centre and each level is one ring further out; a step's angle
+// is its share of the work below its parent (its subtree's step count). So the long delete–contract
+// chains fan out around the circle, and the small pieces a split breaks off are thin slivers that end
+// a ring or two out. Drawn on canvas: the world graph's tree has over 100,000 steps.
+const rad = $("radial"), rctx = rad.getContext("2d"), radSel = d3.select(rad);
+const RING = 36;
+let RL = null, rT = d3.zoomIdentity, rHover = -1, rW = 0, rH = 0, rq = 0;
+function radialLayout() {
+  const T = S.T, t = T.t, N = T.N;
+  const a0 = new Float64Array(N), a1 = new Float64Array(N), x = new Float64Array(N), y = new Float64Array(N), dot = new Float64Array(N);
+  a1[0] = 2 * Math.PI;
+  const radius = new Float64Array(N);
+  let maxDepth = 0;
+  for (let i = 0; i < N; i++) {            // ids ascend from parent to child, so every wedge is set before it is split
+    radius[i] = T.depth[i] * RING;
+    const span = (a1[i] - a0[i]) / Math.max(1, t.sn[i] - 1);
+    // the heaviest child in the middle, the lighter ones alternating outwards, so the costly chains run straight out
+    const ks = Array.from(T.children(i)).sort((p, q) => t.sn[q] - t.sn[p]), order = [];
+    ks.forEach((c, j) => j % 2 ? order.unshift(c) : order.push(c));
+    let a = a0[i];
+    for (const c of order) { a0[c] = a; a += span * t.sn[c]; a1[c] = a; }
+    const th = (a0[i] + a1[i]) / 2, r = radius[i];
+    x[i] = r * Math.sin(th); y[i] = -r * Math.cos(th);
+    dot[i] = i ? Math.max(0.7, Math.min(0.75 * nodeR(i), 0.42 * (a1[i] - a0[i]) * r)) : nodeR(0);
+    if (T.depth[i] > maxDepth) maxDepth = T.depth[i];
+  }
+  let rMax = 0;
+  for (let i = 0; i < N; i++) if (radius[i] > rMax) rMax = radius[i];
+  const at = (th, r) => [r * Math.sin(th), -r * Math.cos(th)];
+  const theta = (i) => (a0[i] + a1[i]) / 2;
+  // Ring arcs: out along the parent's angle to the middle radius, along that ring to the child's angle,
+  // then out. Siblings at one depth share the ring segment, which gives the circuit-board look.
+  const link = (path, i) => {
+    const p = t.parent[i], rm = (radius[p] + radius[i]) / 2, tp = theta(p), ti = theta(i), m = at(tp, rm);
+    path.moveTo(x[p], y[p]); path.lineTo(m[0], m[1]);
+    if (rm > 0) path.arc(0, 0, rm, tp - Math.PI / 2, ti - Math.PI / 2, ti < tp);
+    path.lineTo(x[i], y[i]);
+  };
+  // The paths for steps from … to − 1, one set per colour bin of the palette: the whole tree for the
+  // layer, a frame's worth of new steps while the tree grows (see startGrow).
+  const P = radialPalette(), B = binsFor(T, S.palette);
+  const layer = () => Array.from({ length: B.n }, () => ({ plain: new Path2D(), contract: new Path2D(), leaf: new Path2D(),
+                         dots: { branch: new Path2D(), split: new Path2D(), base: new Path2D(), cache: new Path2D() } }));
+  const build = (from, to) => {
+    const own = layer(), replayed = layer(), heavy = new Path2D();   // replayed steps are drawn faint
+    for (let i = Math.max(1, from); i < to; i++) {
+      const g = (i >= T.N0 ? replayed : own)[B.bin[i]], hv = P.heavy && S.heavy.has(i);
+      link(hv ? heavy : !T.children(i).length ? g.leaf : P.dash && T.via(i) === "contract" ? g.contract : g.plain, i);
+    }
+    for (let i = from; i < to; i++) {
+      const role = ROLE[T.kind(i)], d = (i >= T.N0 ? replayed : own)[B.bin[i]].dots[role], r = dot[i], cx = x[i], cy = y[i];
+      if (role === "split") { const q = r * 1.25; d.moveTo(cx, cy - q); d.lineTo(cx + q * 0.8, cy); d.lineTo(cx, cy + q); d.lineTo(cx - q * 0.8, cy); }   // no closePath: fill closes it, and closePath makes Chromium's Path2D quadratic
+      else if (role === "base") { const q = r * 0.85; d.rect(cx - q, cy - q, 2 * q, 2 * q); }
+      else { d.moveTo(cx + r, cy); d.arc(cx, cy, r, 0, 2 * Math.PI); }
+    }
+    return { own, replayed, heavy };
+  };
+  let leaves = 0;
+  for (let i = 1; i < N; i++) if (!T.children(i).length) leaves++;
+  const quad = d3.quadtree().x((i) => x[i]).y((i) => y[i]).addAll(d3.range(N));
+  // twigs ending in a leaf are drawn fainter the more of them there are: tens of thousands of them
+  // would bury the rest
+  const leafAlpha = Math.max(0.06, Math.min(0.5, 300 / Math.max(1, leaves)));
+  return { T, run: S.run, style: radialStyle(), P, leafAlpha, x, y, dot, maxDepth, rMax,
+           link, build, paths: build(0, N), quad };
+}
+function radialSize() {
+  const r = rad.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  if (!r.width || !r.height) return;
+  rW = r.width; rH = r.height;
+  rad.width = Math.round(rW * dpr); rad.height = Math.round(rH * dpr);
+  radialDirty();
+}
+new ResizeObserver(radialSize).observe(rad);
+function radialDirty() { if (!rq) rq = requestAnimationFrame(() => { rq = 0; drawRadial(); }); }
+// The tree itself is painted into an offscreen layer. While zooming or panning a big tree that bitmap is
+// scaled, and it is repainted sharp once the view settles: the world's tree takes ~150 ms to paint.
+function ringsFor(L, k, px) {               // guide rings at least px apart on screen: [radius, label]
+  const out = [], step = [5, 10, 20, 25, 50, 100].find((d) => d * RING * k >= px) || 100;
+  for (let d = step; d <= L.maxDepth; d += step) out.push([d * RING, d === step ? `depth ${d}` : `${d}`]);
+  return out;
+}
+const rLayer = document.createElement("canvas"), lctx = rLayer.getContext("2d"), bloom = document.createElement("canvas");
+let layerT = null, layerFor = null, settle = 0;
+function paintRings(ctx, L, k) {           // faint rings, every five levels when there is room
+  ctx.strokeStyle = L.P.ring; ctx.lineWidth = 1 / k;
+  for (const [r] of ringsFor(L, k, 8)) { ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.stroke(); }
+}
+// Strokes and fills one set of paths from L.build: every link first, then the heaviest path and the steps.
+function paintPaths(ctx, L, G, k) {
+  const P = L.P, lw = 1 / k;
+  const lines = (bins, alpha) => bins.forEach((g, b) => {
+    ctx.strokeStyle = P.line(b);
+    ctx.globalAlpha = alpha * P.lineAlpha; ctx.stroke(g.plain);
+    ctx.globalAlpha = alpha * P.lineAlpha * L.leafAlpha; ctx.stroke(g.leaf); ctx.globalAlpha = alpha * P.lineAlpha;
+    ctx.setLineDash([3 * lw, 3 * lw]); ctx.stroke(g.contract); ctx.setLineDash([]);
+  });
+  const dots = (bins, alpha) => bins.forEach((g, b) => {
+    ctx.globalAlpha = alpha;
+    for (const role of ["branch", "split", "base"]) { ctx.fillStyle = P.fill(role, b); ctx.fill(g.dots[role]); }
+    ctx.fillStyle = P.bg; ctx.fill(g.dots.cache);
+    ctx.strokeStyle = P.fill("cache", b); ctx.lineWidth = 1.2 * lw; ctx.stroke(g.dots.cache);
+  });
+  ctx.lineWidth = lw; lines(G.replayed, 0.45); lines(G.own, 1);
+  ctx.globalAlpha = 1; ctx.strokeStyle = C.accent; ctx.lineWidth = 2 * lw; ctx.stroke(G.heavy);
+  dots(G.replayed, 0.45); dots(G.own, 1);
+  ctx.globalAlpha = 1;
+}
+function paintScene(ctx, L, t, dpr) {      // the whole tree in view t, onto ctx's canvas
+  const P = L.P, k = t.k, cv = ctx.canvas;
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * t.x, dpr * t.y);
+  ctx.lineCap = "round";
+  paintRings(ctx, L, k);
+  if (P.glow) ctx.globalCompositeOperation = "lighter";
+  paintPaths(ctx, L, L.paths, k);
+  ctx.globalCompositeOperation = "source-over";
+  if (P.glow) {                            // bloom: a blurred copy of the layer, added on top
+    bloom.width = cv.width; bloom.height = cv.height;
+    const b = bloom.getContext("2d");
+    b.filter = `blur(${Math.round(5 * dpr)}px)`; b.drawImage(cv, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.9;
+    ctx.drawImage(bloom, 0, 0);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+    bloom.width = bloom.height = 0;
+  }
+}
+function paintLayer() {
+  rLayer.width = rad.width; rLayer.height = rad.height;
+  paintScene(lctx, RL, rT, rad.width / (rW || 1));
+  layerT = rT; layerFor = RL;
+}
+// Ring labels in screen space: from the top of each labelled ring, where its tangent is horizontal, a
+// dashed leader runs right, past the tree, to the depth; all depths line up in one column. Kept inside
+// [x0, y0, x1, y1] (CSS px). LABEL_GUTTER is the room the column takes right of the tree.
+const LABEL_GUTTER = 92;
+function paintLabels(ctx, L, t, dpr, [x0, y0, x1, y1]) {
+  if (S.hideLabels) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = `400 13px ${cs.getPropertyValue("--display")}`; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  const ink = L.P.dark ? L.P.fg : C.ink, rings = ringsFor(L, t.k, 30);
+  const wide = Math.max(0, ...rings.map(([, label]) => ctx.measureText(label).width));
+  const col = Math.min(t.apply([L.rMax + 18 / t.k, 0])[0], x1 - wide - 6);
+  for (const [r, label] of rings) {
+    const [sx, sy] = t.apply([0, -r]);
+    if (sy < y0 || sy > y1 || col < x0 || sx > col) continue;
+    ctx.globalAlpha = 0.5; ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(col, sy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1; ctx.fillStyle = ink; ctx.strokeStyle = L.P.bg; ctx.lineWidth = 4;
+    ctx.strokeText(label, col + 6, sy); ctx.fillText(label, col + 6, sy);
+  }
+  ctx.textBaseline = "alphabetic"; ctx.textAlign = "start";
+}
+// Download: the whole tree, fitted to a 2000 px square drawn at 4× (8000 px), so lines keep their on-screen
+// weight and the print can be zoomed into.
+function downloadRadial() {
+  if (!RL) return;
+  const L = RL, side = 2000, dpr = 4, k = side / (2 * (L.rMax + 40)), w = side + (S.hideLabels ? 0 : LABEL_GUTTER);
+  const t = d3.zoomIdentity.translate(side / 2, side / 2).scale(k);
+  const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+  cv.width = w * dpr; cv.height = side * dpr;
+  ctx.fillStyle = L.P.bg; ctx.fillRect(0, 0, cv.width, cv.height);
+  paintScene(ctx, L, t, dpr);
+  paintLabels(ctx, L, t, dpr, [20, 20, w - 20, side - 20]);
+  cv.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `chromatic-${(S.graph.id || "graph").toString().toLowerCase()}-radial-${S.palette}${S.glow ? "-glow" : ""}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    cv.width = cv.height = 0;
+  }, "image/png");
+}
+
+// ---- growing the tree ----------------------------------------------------------------------------------
+// Ids are the order the engine entered the steps, so drawing them in id order replays the computation.
+// Each frame paints only the new steps onto their own canvas; the recursion stack is drawn live from the
+// root to the step being entered, and every cache hit flashes a link back to the step it reuses.
+const gcv = document.createElement("canvas"), gctx = gcv.getContext("2d");
+let grow = null;
+function startGrow() {
+  if (!RL) return;
+  const N = RL.T.N;
+  grow = { L: RL, t0: performance.now(), dur: 1000 * Math.max(4, Math.min(20, 3 + 1.5 * Math.log2(N / 100))), cut: 0, painted: 0, view: null, flashes: [] };
+  $("grow").textContent = "■ Stop";
+  requestAnimationFrame(growTick);
+}
+function stopGrow() {
+  grow = null;
+  $("grow").textContent = "▶ Grow";
+  radialDirty();
+}
+function growTick(now) {
+  const g = grow;
+  if (!g) return;
+  if (RL !== g.L || rad.hidden) return stopGrow();
+  const T = g.L.T, N = T.N, cut = Math.min(N, Math.ceil(N * (now - g.t0) / g.dur));
+  for (let i = g.cut; i < cut; i++) if (T.kind(i) === "cache_hit") g.flashes.push([i, T.t.extra[i].origin, now]);
+  g.flashes = g.flashes.filter((f) => now - f[2] < 700).slice(-80);
+  g.cut = cut; g.now = now;
+  drawRadial();
+  if (cut < N || g.flashes.length) requestAnimationFrame(growTick);
+  else stopGrow();
+}
+function drawGrowing(L, dpr, k) {
+  const g = grow;
+  if (gcv.width !== rad.width || gcv.height !== rad.height || g.view !== rT) {   // new size or view: start the canvas over
+    gcv.width = rad.width; gcv.height = rad.height; g.painted = 0; g.view = rT;
+  }
+  if (g.painted < g.cut) {
+    gctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * rT.x, dpr * rT.y);
+    gctx.lineCap = "round";
+    if (L.P.glow) gctx.globalCompositeOperation = "lighter";
+    paintPaths(gctx, L, L.build(g.painted, g.cut), k);
+    gctx.globalCompositeOperation = "source-over";
+    g.painted = g.cut;
+  }
+  rctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * rT.x, dpr * rT.y);
+  paintRings(rctx, L, k);
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  rctx.drawImage(gcv, 0, 0);
+}
+function drawGrowOverlay(L, lw) {
+  const g = grow, T = L.T, P = L.P, head = g.cut - 1;
+  if (head > 0) {                          // the recursion stack: root to the step being entered
+    const path = new Path2D();
+    for (let i = head; i > 0; i = T.t.parent[i]) L.link(path, i);
+    rctx.globalAlpha = 0.85; rctx.strokeStyle = P.fg; rctx.lineWidth = 1.4 * lw; rctx.stroke(path); rctx.globalAlpha = 1;
+  }
+  if (head >= 0) { rctx.beginPath(); rctx.arc(L.x[head], L.y[head], L.dot[head] + 3 * lw, 0, 2 * Math.PI); rctx.fillStyle = P.fg; rctx.fill(); }
+  rctx.strokeStyle = P.dark ? P.fg : ROLE_STYLE.cache.color; rctx.lineWidth = 1.4 * lw;
+  for (const [h, o, t0] of g.flashes) {    // a cache hit reaching back to the step it reuses, fading
+    rctx.globalAlpha = 1 - (g.now - t0) / 700;
+    rctx.beginPath(); rctx.moveTo(L.x[h], L.y[h]);
+    rctx.bezierCurveTo(L.x[h] * 0.45, L.y[h] * 0.45, L.x[o] * 0.45, L.y[o] * 0.45, L.x[o], L.y[o]); rctx.stroke();
+  }
+  rctx.globalAlpha = 1;
+}
+
+function drawRadial() {
+  const dpr = rad.width / (rW || 1), k = rT.k;
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  rctx.clearRect(0, 0, rad.width, rad.height);
+  if (!RL || rad.hidden || !S.T) return;
+  const L = RL, T = S.T, lw = 1 / k, P = L.P;
+  if (P.bg !== C.paper) { rctx.fillStyle = P.bg; rctx.fillRect(0, 0, rad.width, rad.height); }
+  if (grow && grow.L === L) drawGrowing(L, dpr, k);
+  else {
+    const usable = layerFor === L && rLayer.width === rad.width && rLayer.height === rad.height;
+    if (!usable || (L.T.N < 20000 && !L.P.glow)) { if (!usable || layerT !== rT) paintLayer(); }   // the bloom is too slow to repaint every frame
+    else if (layerT !== rT) { clearTimeout(settle); settle = setTimeout(() => { paintLayer(); radialDirty(); }, 140); }
+    const s = rT.k / layerT.k;             // the layer, scaled from the view it was painted at
+    rctx.setTransform(s, 0, 0, s, dpr * (rT.x - s * layerT.x), dpr * (rT.y - s * layerT.y));
+    rctx.drawImage(rLayer, 0, 0);
+  }
+  rctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * rT.x, dpr * rT.y);
+  rctx.lineCap = "round";
+  if (grow && grow.L === L) drawGrowOverlay(L, lw);
+  if (S.sel > 0) {                         // the way from the root to the selected step
+    const path = new Path2D();
+    for (let i = S.sel; i > 0; i = T.t.parent[i]) L.link(path, i);
+    rctx.strokeStyle = P.fg; rctx.lineWidth = 1.6 * lw; rctx.stroke(path);
+  }
+  const pairs = reusePairs(S.sel);
+  if (pairs.length) {                      // a cache hit and the step it reuses, bowed through the middle
+    const arc = new Path2D();
+    for (const [h, o] of pairs) {
+      arc.moveTo(L.x[h], L.y[h]);
+      arc.bezierCurveTo(L.x[h] * 0.45, L.y[h] * 0.45, L.x[o] * 0.45, L.y[o] * 0.45, L.x[o], L.y[o]);
+    }
+    rctx.strokeStyle = P.dark ? P.fg : ROLE_STYLE.cache.color; rctx.lineWidth = 1.6 * lw;
+    rctx.setLineDash([5 * lw, 4 * lw]); rctx.stroke(arc); rctx.setLineDash([]);
+  }
+  const halo = (i, w) => { rctx.beginPath(); rctx.arc(L.x[i], L.y[i], L.dot[i] + 4 * lw, 0, 2 * Math.PI); rctx.strokeStyle = P.fg; rctx.lineWidth = w * lw; rctx.stroke(); };
+  if (rHover >= 0 && rHover !== S.sel) halo(rHover, 1);
+  if (S.sel >= 0) halo(S.sel, 1.8);
+  paintLabels(rctx, L, rT, dpr, [30, 60, rW - 30, rH - 50]);
+}
+function fitRadial(animate) {
+  if (!RL) return;
+  const [x0, y0, x1, y1] = stageArea(rW, rH), R = RL.rMax + 16, gutter = S.hideLabels ? 0 : LABEL_GUTTER;
+  const k = Math.min(2, (x1 - x0 - gutter) / (2 * R), (y1 - y0) / (2 * R));
+  const t = d3.zoomIdentity.translate((x0 + x1 - gutter) / 2, (y0 + y1) / 2).scale(k);
+  (animate && !reduce ? radSel.transition().duration(450) : radSel).call(rzoom.transform, t);
+}
+function revealRadial(id) {
+  if (!RL) return;
+  const [sx, sy] = rT.apply([RL.x[id], RL.y[id]]);
+  if (sx > 40 && sx < rW - 40 && sy > 70 && sy < rH - 60) return;
+  (reduce ? radSel : radSel.transition().duration(350)).call(rzoom.translateTo, RL.x[id], RL.y[id]);
+}
+const rzoom = d3.zoom().scaleExtent([0.02, 60]).on("zoom", (e) => { rT = e.transform; radialDirty(); });
+radSel.call(rzoom).on("dblclick.zoom", null);
+function radialAt(e) {
+  if (!RL) return -1;
+  const r = rad.getBoundingClientRect();
+  const [lx, ly] = rT.invert([e.clientX - r.left, e.clientY - r.top]);
+  const i = RL.quad.find(lx, ly, 12 / rT.k);
+  return i === undefined ? -1 : i;
+}
+rad.addEventListener("click", (e) => { const i = radialAt(e); if (i >= 0) selectStep(i, false); });
+rad.addEventListener("mousemove", (e) => {
+  const i = radialAt(e);
+  if (i !== rHover) { rHover = i; radialDirty(); }
+  rad.style.cursor = i >= 0 ? "pointer" : "";
+  i >= 0 ? showTip(e, stepTip(i)) : hideTip();
+});
+rad.addEventListener("mouseleave", () => { if (rHover >= 0) { rHover = -1; radialDirty(); } hideTip(); });
+rad.addEventListener("keydown", treeKeys);
+
+function setView(v) {
+  S.view = v;
+  try { localStorage.setItem("chromatic-view-2", v); } catch (e) {}
+  $("v-tree").setAttribute("aria-pressed", v === "tree"); $("v-radial").setAttribute("aria-pressed", v === "radial");
+  $("tree").hidden = v !== "tree"; rad.hidden = v !== "radial"; $("collapse").hidden = v === "radial";
+  for (const el of document.querySelectorAll(".radial-only")) el.hidden = v !== "radial";
+  if (v === "radial") radialSize();
+  else zoomFit = true;
+  renderTree();
+}
+function setPalette(p) {
+  if (!PALETTES[p]) p = "size";
+  S.palette = p; $("palette").value = p;
+  try { localStorage.setItem("chromatic-palette-2", p); } catch (e) {}
+  if (S.view === "radial") renderTree();
+}
+$("palette").addEventListener("change", (e) => setPalette(e.target.value));
+const radialStyle = () => [S.palette, S.glow].join();
+function setLook(o) {                      // any of {glow, hideLabels}
+  Object.assign(S, o);
+  $("glow").setAttribute("aria-pressed", S.glow);
+  $("labels").setAttribute("aria-pressed", S.hideLabels);
+  try { localStorage.setItem("chromatic-look", JSON.stringify({ glow: S.glow, hideLabels: S.hideLabels })); } catch (e) {}
+  if (S.view === "radial") renderTree();
+}
+$("grow").addEventListener("click", () => grow ? stopGrow() : startGrow());
+$("glow").addEventListener("click", () => setLook({ glow: !S.glow }));
+$("labels").addEventListener("click", () => setLook({ hideLabels: !S.hideLabels }));
+$("download").addEventListener("click", downloadRadial);
+$("v-tree").addEventListener("click", () => setView("tree"));
+$("v-radial").addEventListener("click", () => setView("radial"));
+
+function selectStep(id, fromClick) {
+  const T = S.T;
+  let changed = false;
+  for (let p = T.t.parent[id]; p >= 0; p = T.t.parent[p]) if (!S.open.has(p)) { S.open.add(p); changed = true; }
+  if (T.kind(id) === "cache_hit")          // open the way to the step it reuses, so the arc has both ends
+    for (let p = T.t.parent[reusedFrom(id)]; p >= 0; p = T.t.parent[p]) if (!S.open.has(p)) { S.open.add(p); changed = true; }
+  if (fromClick && id === S.sel && T.children(id).length) {      // a second click toggles the step open/closed
+    S.open.has(id) ? S.open.delete(id) : S.open.add(id); changed = true;
+  } else if (fromClick && !S.open.has(id) && T.children(id).length) { S.open.add(id); changed = true; }
+  S.sel = id;
+  if (changed) renderTree(); else paintSelection();
+  renderStep();
+  dirty = true;
+}
+
+// ---- describing a step -------------------------------------------------------------------------------
+function vertexName(set, short) {          // a local vertex = a set of root vertices
+  const g = S.graph;
+  if (!set) return "";
+  const nm = (v) => g.nodes ? (short ? g.nodes[v][0].replace(/^[A-Z]{2}-/, "") : g.nodes[v][1]) : String(v);
+  if (set.length === 1) return nm(set[0]);
+  if (short) return nm(set[0]) + "+" + (set.length - 1);
+  return set.length === 2 ? `${nm(set[0])} + ${nm(set[1])}` : `${nm(set[0])} + ${set.length - 1} more`;
+}
+function stepTitle(i, G) {
+  const T = S.T, t = T.t, k = T.kind(i), n = t.n[i];
+  const x = t.extra[i] || {};
+  switch (k) {
+    case "branch": {
+      const a = G && G.verts ? vertexName(G.verts[t.u[i]]) : t.u[i], b = G && G.verts ? vertexName(G.verts[t.v[i]]) : t.v[i];
+      return { h: `Delete and contract the ${S.graph.geo ? "border" : "edge"} ${esc(a)} — ${esc(b)}`, rule: `<i>P</i>(<i>G</i>) = <i>P</i>(<i>G</i> − <i>e</i>) − <i>P</i>(<i>G</i> / <i>e</i>)` };
+    }
+    case "clique_sep": return { h: `Split on a ${x.sep ? x.sep.length : ""}-clique separator`,
+      rule: `<i>P</i>(<i>G</i>) = ∏ <i>P</i>(<i>G<sub>i</sub></i>) / <i>P</i>(<i>K<sub>s</sub></i>)<sup>r−1</sup>: the pieces only share the clique` };
+    case "join": return { h: "A join of independent parts", rule: "every vertex of one part touches every vertex of the others: an umbral product" };
+    case "disconnected": return { h: `${T.children(i).length} separate components`, rule: `<i>P</i>(<i>G</i>) = ∏ <i>P</i>(<i>G<sub>i</sub></i>)` };
+    case "complement_sep": return { h: "Split on a complement clique-separator", rule: "inclusion–exclusion over the pieces" };
+    case "cache_hit": return { h: "Seen before", rule: "an isomorphic graph was already solved; its polynomial is reused (nauty canonical form)" };
+    case "base_empty": return { h: `${n} isolated vertices`, rule: `<i>P</i> = <i>k</i><sup>${n}</sup>` };
+    case "base_tree": return { h: `A tree on ${n} vertices`, rule: `<i>P</i> = <i>k</i>(<i>k</i> − 1)<sup>${n - 1}</sup>` };
+    case "base_complete": {
+      const f = (j) => j ? `(<i>k</i> − ${j})` : `<i>k</i>`;
+      const prod = n <= 4 ? d3.range(n).map(f).join("") : `${f(0)}${f(1)}⋯${f(n - 1)}`;
+      return { h: `The complete graph <i>K</i><sub>${n}</sub>`, rule: `<i>P</i> = ${prod}` };
+    }
+    case "base_cycle": return { h: `A cycle <i>C</i><sub>${n}</sub>`, rule: `<i>P</i> = (<i>k</i> − 1)<sup>${n}</sup> + (−1)<sup>${n}</sup>(<i>k</i> − 1)` };
+    case "base_wheel": return { h: `A wheel on ${n} vertices`, rule: `<i>P</i> = <i>k</i>[(<i>k</i> − 2)<sup>${n - 1}</sup> + (−1)<sup>${n - 1}</sup>(<i>k</i> − 2)]` };
+    default: return { h: "Step", rule: "" };
+  }
+}
+function stepTip(i) {
+  const T = S.T, t = T.t, st = ROLE_STYLE[ROLE[T.kind(i)]];
+  const extra = T.kind(i) === "cache_hit" ? `, reuses step ${fmt(reusedFrom(i))}` : i >= T.N0 ? `, replay of step ${fmt(T.realOf(i))}` : "";
+  return `${st.label}: step ${fmt(i)}<br><small>${t.n[i]} ${t.n[i] === 1 ? "vertex" : "vertices"}, ${fmt(t.m[i])} edge${t.m[i] === 1 ? "" : "s"}${extra}</small>`;
+}
+const viaLabel = (via, j) => ({ delete: "G − e", contract: "G / e", insert: "G + e", piece: `Piece ${j + 1}`, ie_piece: `Term ${j + 1}` })[via] || via;
+
+// ---- drawing a step's graph ----------------------------------------------------------------------------
+// Geographic graphs are drawn on their own map: a local vertex is the union of its root regions,
+// shaded by how many regions have been contracted into it. Drawn graphs use the canvas positions.
+const geoCache = new Map();
+async function geoFrame(g) {               // projection + projected unit paths for a map graph (viewBox units)
+  if (geoCache.has(g.key)) return geoCache.get(g.key);
+  const units = await outlines(g.kind === "world" ? g.id + "_lo" : g.id);
+  const pts = g.nodes.map((nd) => [nd[2], nd[3]]);
+  const c0 = d3.geoCentroid({ type: "MultiPoint", coordinates: pts });
+  const dist = pts.map((p) => d3.geoDistance(c0, p)).sort((a, b) => a - b);
+  const cut = dist[Math.min(dist.length - 1, Math.floor(0.85 * dist.length))] * 1.5 + 1e-4;
+  const core = g.nodes.map((_, i) => i).filter((i) => d3.geoDistance(c0, pts[i]) <= cut);
+  const proj = g.kind === "world" ? d3.geoEqualEarth() : d3.geoAzimuthalEqualArea().rotate([-c0[0], -c0[1]]);
+  const fitTo = { type: "GeometryCollection", geometries: core.map((i) => units[i].geo) };
+  proj.fitExtent([[24, 24], [976, 976]], fitTo);
+  const path = d3.geoPath(proj);
+  const [[x0, y0], [x1, y1]] = path.bounds(fitTo);
+  const pad = 22, vb = [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad];
+  const frame = { vb, unitPaths: units.map((u) => path(u.geo) || ""), points: pts.map((p) => proj(p)) };
+  geoCache.set(g.key, frame);
+  return frame;
+}
+function plainFrame(g) {
+  const pts = g.pos.map(([x, y]) => [x * 1000, y * 820]);
+  return { vb: [-40, -40, 1080, 900], unitPaths: null, points: pts };
+}
+const mergedFill = d3.scaleLinear().domain([1, 2, 12]).range([C.land, C["accent-wash"], C["accent-mid"]]).clamp(true);
+
+// opts: {w (px, for marker scale), chosen: [u,v], sep: [..], scores: [..], labels: bool, focus: bool,
+//        ghost: [u,v] (an edge just deleted, dashed), mark: v (a vertex just formed by contraction)}
+function graphSvg(frame, G, opts) {
+  const [vx, vy, vw, vh] = frame.vb, k = vw / opts.w;   // viewBox units per screen px
+  let s = `<svg viewBox="${vx} ${vy} ${vw} ${vh}" preserveAspectRatio="xMidYMid meet" role="img">`;
+  const group = new Int32Array(S.graph.n).fill(-1);
+  if (G.verts) G.verts.forEach((set, v) => set.forEach((r) => { group[r] = v; }));
+  const chosen = new Set(opts.chosen && G.verts ? [opts.chosen[0], opts.chosen[1]] : opts.mark != null ? [opts.mark] : []);
+  if (frame.unitPaths) {
+    frame.unitPaths.forEach((d, r) => {
+      if (!d) return;
+      const v = group[r], size = v >= 0 ? G.verts[v].length : 0;
+      const fill = v < 0 ? C["muted-fill"] : chosen.has(v) ? C["accent-mid"] : mergedFill(size);
+      s += `<path d="${d}" fill="${fill}" stroke="${v < 0 ? C["border-faint"] : C.border}" stroke-width="${0.6 * k}"/>`;
+    });
+  }
+  // vertex positions: mean of their regions' points (a contracted vertex sits among its regions)
+  let P;
+  if (G.verts) P = G.verts.map((set) => {
+    let x = 0, y = 0, c = 0;
+    for (const r of set) { const p = frame.points[r]; if (p) { x += p[0]; y += p[1]; c++; } }
+    return c ? [x / c, y / c] : [vx + vw / 2, vy + vh / 2];
+  });
+  else P = d3.range(G.n).map((i) => [vx + vw / 2 + vw * 0.38 * Math.cos(2 * Math.PI * i / G.n), vy + vh / 2 + vh * 0.38 * Math.sin(2 * Math.PI * i / G.n)]);
+  let col = null;
+  if (opts.scores && opts.scores.length === G.edges.length) {
+    const ext = d3.extent(opts.scores);
+    col = d3.scaleLinear().domain([ext[0], ext[1] + 1e-12]).range(["#cde2fb", "#104281"]);
+  }
+  const ck = opts.chosen ? Math.min(...opts.chosen) * 100003 + Math.max(...opts.chosen) : -1;
+  let chosenLine = "";
+  G.edges.forEach(([a, b], j) => {
+    const line = `x1="${P[a][0]}" y1="${P[a][1]}" x2="${P[b][0]}" y2="${P[b][1]}"`;
+    if (a * 100003 + b === ck) { chosenLine = `<line ${line} stroke="${C.accent}" stroke-width="${3.4 * k}" stroke-linecap="round"/>`; return; }
+    s += `<line ${line} stroke="${col ? col(opts.scores[j]) : C.ink}" stroke-opacity="${col ? 1 : 0.55}" stroke-width="${(col ? 1.8 : 1) * k}">`
+      + (col ? `<title>score ${opts.scores[j].toFixed(4)}</title>` : "") + `</line>`;
+  });
+  s += chosenLine;
+  if (opts.ghost) {
+    const [a, b] = opts.ghost;
+    s += `<line x1="${P[a][0]}" y1="${P[a][1]}" x2="${P[b][0]}" y2="${P[b][1]}" stroke="${C.accent}" stroke-width="${2.2 * k}" stroke-dasharray="${4 * k} ${3 * k}" stroke-linecap="round"/>`;
+  }
+  const sep = new Set(opts.sep || []);
+  const r = (opts.focus ? 3.6 : 2.6) * k;
+  P.forEach((p, v) => {
+    const isSep = sep.has(v), isChosen = chosen.has(v) || (!G.verts && ((opts.chosen && opts.chosen.includes(v)) || opts.mark === v));
+    s += `<circle cx="${p[0]}" cy="${p[1]}" r="${isSep || isChosen ? r * 1.35 : r}" fill="${isChosen ? C.accent : C.ink}" stroke="${isSep ? C["k-split"] : C.panel}" stroke-width="${(isSep ? 2.4 : 1.2) * k}">`
+      + `<title>${esc(G.verts ? vertexName(G.verts[v]) : "vertex " + v)}</title></circle>`;
+  });
+  if (opts.labels && P.length <= 70) {
+    P.forEach((p, v) => {
+      const lab = G.verts ? vertexName(G.verts[v], true) : String(v);
+      s += `<text x="${p[0] + r + 2.5 * k}" y="${p[1]}" dy="0.35em" font-size="${10 * k}" font-family="Geist, sans-serif" fill="${C.ink}" stroke="${C.panel}" stroke-width="${3 * k}" paint-order="stroke">${esc(lab)}</text>`;
+    });
+  }
+  return s + "</svg>";
+}
+
+let stepToken = 0;
+async function renderStep() {
+  const pane = $("step-pane");
+  const T = S.T, i = S.sel;
+  if (!T || i < 0) {
+    pane.className = "empty-step";
+    pane.textContent = S.busy ? "The tree appears when the engine finishes." :
+      "Pick a country on the globe, or draw a graph and press Compute, and its decomposition tree appears on the right. Click any step to see its graph here.";
+    return;
+  }
+  const token = ++stepToken, g = S.graph, t = T.t;
+  let G;
+  try { G = replay(i); } catch (err) { pane.className = "step"; pane.innerHTML = `<p class="err">${esc(err.message)}</p>`; return; }
+  const frame = g.geo ? await geoFrame(g) : plainFrame(g);
+  if (token !== stepToken) return;
+  const kind = T.kind(i), { h, rule } = stepTitle(i, G);
+  const kids = Array.from(T.children(i));
+  const isBranch = kind === "branch";
+  const width = pane.clientWidth - 36 || 340;
+  const link = kind === "cache_hit" ? t.extra[i] : null, unfolded = !!link && T.unfoldOf.has(i);
+  // an unfolded hit branches as the step it reuses: that step's edge, carried back into the hit's own labels
+  const kidEdge = isBranch ? [t.u[i], t.v[i]] : unfolded ? [t.u[link.origin], t.v[link.origin]] : null;
+  const chosen = isBranch ? kidEdge : unfolded ? kidEdge.map((v) => link.iso.indexOf(v)) : null;
+  const reuse = reuseOf(S.run);
+  const sep = (t.extra[i] || {}).sep;
+  let scores = null;
+  const scoreable = S.selector === "learned" || S.selector === "mlp";
+  const wantScores = S.scores && isBranch && scoreable && S.run === currentRunFor(S.selector);
+  const depth = T.depth[i];
+  const crumbs = [];
+  for (let p = i; p >= 0; p = t.parent[p]) crumbs.unshift(p);
+  const crumbHtml = crumbs.length > 1 ? `<nav class="crumbs" aria-label="Path from the root">${crumbs.slice(-8).map((p, j, arr) =>
+    `<button data-step="${p}">${p === 0 ? "root" : esc(viaLabel(T.via(p), 0).replace("Piece 1", "piece"))}${j < arr.length - 1 ? ' <span class="arrow" aria-hidden="true">→</span>' : ""}</button>`).join("")}</nav>` : "";
+  const crumbLead = crumbs.length > 8 ? "… " : "";
+
+  const draw = () => {
+    const merged = G.verts ? G.verts.filter((s) => s.length > 1).length : 0;
+    const caption = [`${G.n} vertices, ${fmt(G.edges.length)} edges`];
+    if (merged) caption.push(`${merged} contracted (shaded by regions merged)`);
+    if (sep) caption.push("separator ringed in blue");
+    if (scores) caption.push("edges by policy score, light → dark");
+    pane.className = "step";
+    pane.innerHTML =
+      (i >= T.N0 ? `<p class="replay-note">A replay of step ${fmt(T.realOf(i))}, reused under the cache hit at <button data-step="${T.entryAt(i).host}">step ${fmt(T.entryAt(i).host)}</button>. The engine did not compute it again.</p>` : "")
+      + `<p class="eyebrow">${i >= T.N0 ? "Replay of step " + fmt(T.realOf(i)) : "Step " + fmt(i)}: depth ${depth}, ${fmt(t.sn[i])} step${t.sn[i] === 1 ? "" : "s"} in this subtree</p>`
+      + `<h2>${h}</h2><p class="rule">${rule}</p>`
+      + (link ? `<div class="reuse"><p>This graph was first solved at <button data-step="${link.origin}">step ${fmt(link.origin)}</button>: the same shape with its vertices relabelled. Taking its polynomial from the cache saved <b>${bigCount(reuse.U[link.origin] - 1)}</b> step${reuse.U[link.origin] === 2 ? "" : "s"}${reuse.U[link.origin] - 1 > S.run.trace.sn[link.origin] - 1 ? `, counting the reuses inside that subtree (it has ${fmt(S.run.trace.sn[link.origin] - 1)} of its own)` : ""}.</p>`
+          + `<button class="pill" id="unfold">${unfolded ? "Fold the replay" : "Unfold its tree here"}</button></div>` : "")
+      + (!link && i < T.N0 && reuse.hitsOf.has(i) ? (() => {
+          const hs = reuse.hitsOf.get(i), each = reuse.U[i] - 1;
+          return `<div class="reuse"><p>Reused <b>${fmt(hs.length)}</b> time${hs.length === 1 ? "" : "s"} later from the cache, saving <b>${bigCount(each * hs.length)}</b> steps in all.</p>`
+            + `<p class="reuse-list">${hs.slice(0, 12).map((h) => `<button data-step="${h}">step ${fmt(h)}</button>`).join("")}${hs.length > 12 ? ` <span>and ${fmt(hs.length - 12)} more</span>` : ""}</p></div>`;
+        })() : "")
+      + `<figure class="figure">${graphSvg(frame, G, { w: width, chosen, sep, scores, labels: true, focus: true })}<figcaption>${caption.join("; ")}</figcaption></figure>`
+      + (isBranch ? `<div class="figure-actions"><button class="pill" id="t-scores" aria-pressed="${scoreable && S.scores}"${scoreable ? "" : " disabled"}`
+          + ` title="${scoreable ? "Colour this graph's edges by the policy's score for each one" : "Only the learned and MLP selectors score edges"}">Edge scores</button></div>` : "")
+      + (kids.length ? `<div class="kids-h">Derived graphs <span>${kids.length}</span></div><div class="kids">${kids.map((c, j) => {
+          let Gc; try { Gc = replay(c); } catch (e) { return ""; }
+          // each card shows what changed: the deleted edge as a dashed ghost, the contracted pair as one amber vertex
+          const via = T.via(c), lo = kidEdge ? Math.min(...kidEdge) : -1, hi = kidEdge ? Math.max(...kidEdge) : -1;
+          const change = via === "delete" ? { ghost: [lo, hi] } : via === "contract" ? { mark: lo } : via === "insert" ? { chosen: [lo, hi] } : {};
+          return `<button class="kid" data-step="${c}" aria-label="Open step ${c}">${graphSvg(frame, Gc, { w: 160, ...change })}`
+            + `<div><b>${esc(viaLabel(T.via(c), j)).replace(/\b([Ge])\b/g, "<i>$1</i>")}</b><small>${fmt(t.sn[c])} step${t.sn[c] === 1 ? "" : "s"}</small></div></button>`;
+        }).join("")}</div>${kidEdge ? `<p class="kids-note">The deleted edge is dashed; the contracted pair is the amber vertex.</p>` : ""}`
+        : kind === "cache_hit" ? "" : `<p class="leaf">Closed form</p>`)
+      + `<dl class="meta"><dt>Decisions below</dt><dd>${fmt(t.sb[i])}</dd>`
+      + (isBranch && G.verts ? `<dt>Chosen edge</dt><dd>${esc(vertexName(G.verts[chosen[0]]))} — ${esc(vertexName(G.verts[chosen[1]]))}</dd>` : "")
+      + (sep && G.verts ? `<dt>Separator</dt><dd>${sep.map((v) => esc(vertexName(G.verts[v]))).join(", ")}</dd>` : "")
+      + `</dl>` + crumbHtml.replace('aria-label="Path from the root">', 'aria-label="Path from the root">' + crumbLead);
+    pane.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => { selectStep(+b.dataset.step, false); revealStep(+b.dataset.step); }));
+    if ($("unfold")) $("unfold").addEventListener("click", () => unfolded ? fold(i) : unfold(i));
+    if ($("t-scores")) $("t-scores").addEventListener("click", () => { S.scores = !S.scores; renderStep(); });
+  };
+  draw();
+  if (wantScores) {
+    try {
+      scores = await ask({ op: "scores", n: G.n, edges: G.edges, selector: S.selector });
+      if (token === stepToken) draw();
+    } catch (e) { /* the worker was stopped; leave the plain drawing */ }
+  }
+}
+function currentRunFor(selector) {
+  const h = (S.history.get(S.graph.key) || []).find((x) => x.result === S.run);
+  return h && h.selector === selector ? S.run : null;
+}
+
+// ---- globe inset -----------------------------------------------------------------------------------------
+const canvas = $("globe"), ctx = canvas.getContext("2d");
+const proj = d3.geoOrthographic().clipAngle(90).precision(0.8);
+const gpath = d3.geoPath(proj, ctx);
+const graticule = d3.geoGraticule10();
+const lodFor = (scale) => scale < 2 ? "lo" : scale < 8 ? "mid" : "hi";
+let W = 0, H = 0, baseScale = 1, dirty = true;
+const view = { lambda: -10, phi: -20, scale: 1 };
+let globeGraph = null, hover = -1, screen = [], flight = null, lastT = 0, interacting = false;
+const layers = {};
+function want(id, lod) {
+  const k = id + ":" + lod;
+  if (!(k in layers)) { layers[k] = null; outlines(lod === "hi" ? id : id + "_" + lod).then((f) => { layers[k] = f; dirty = true; }); }
+  return layers[k];
+}
+function pick(id, lod, fallbacks) {
+  const got = want(id, lod);
+  if (got) return got;
+  for (const l of fallbacks) if (layers[id + ":" + l]) return layers[id + ":" + l];
+  return null;
+}
+const W3 = ["lo", "mid", "hi"];
+await outlines("natural_earth_lo");
+want("natural_earth", "lo");
+
+function resize() {
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  if (!r.width || !r.height) return;       // hidden (draw mode): keep the last size, or the next flight starts from scale 0
+  W = r.width; H = r.height;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  baseScale = Math.min(W, H) * 0.44;
+  dirty = true;
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+const centre = () => [W / 2, H / 2 + 14];
+function fit(g) {
+  if (g.kind === "world") return { lon: 10, lat: 20, scale: baseScale };
+  const pts = g.nodes.map((nd) => [nd[2], nd[3]]);
+  const c0 = d3.geoCentroid({ type: "MultiPoint", coordinates: pts });
+  const ds = pts.map((p) => d3.geoDistance(c0, p)).sort((a, b) => a - b);
+  const cut = ds[Math.min(ds.length - 1, Math.floor(0.85 * ds.length))] * 1.5 + 1e-4;
+  const core = pts.filter((p) => d3.geoDistance(c0, p) <= cut);
+  const c = d3.geoCentroid({ type: "MultiPoint", coordinates: core });
+  const r = Math.max(...core.map((p) => d3.geoDistance(c, p)));
+  const ang = Math.min(Math.max(r * 1.35, 0.004), 1.3);
+  return { lon: c[0], lat: c[1], scale: Math.min(W, H) * 0.36 / Math.sin(ang) };
+}
+function flyTo(target) {
+  const from = [-view.lambda, -view.phi], to = [target.lon, target.lat];
+  const dist = d3.geoDistance(from, to), s0 = view.scale * baseScale, s1 = target.scale;
+  const dur = reduce ? 0 : 900 + 600 * Math.min(1, dist / 2) + 250 * Math.min(1, Math.abs(Math.log(s1 / s0)) / 4);
+  const hop = Math.min(0.45, dist / 3), gi = d3.geoInterpolate(from, to);
+  flight = { t0: performance.now(), dur, step(t) {
+    const e = d3.easeCubicInOut(t), [lon, lat] = gi(e);
+    const s = Math.exp(Math.log(s0) + (Math.log(s1) - Math.log(s0)) * e) * (1 - hop * Math.sin(Math.PI * e));
+    view.lambda = -lon; view.phi = -lat; view.scale = Math.max(s, baseScale * 0.55) / baseScale;
+  } };
+}
+
+let ctr = [0, 0], reach = Math.PI / 2;
+const inView = (f) => d3.geoDistance(ctr, f.c) - f.r < reach;
+function trace(fs) { for (const u of fs) if (inView(u)) for (const f of u.parts) if (inView(f)) gpath(f); }
+
+// fill for root vertex r of the globe's graph, from the selected step (null when no step applies)
+function stepGroups() {
+  if (!S.T || S.sel < 0 || !S.graph || !globeGraph || globeGraph !== S.graph.src) return null;
+  let G;
+  try { G = replay(S.sel); } catch (e) { return null; }
+  if (!G.verts) return null;
+  const group = new Int32Array(globeGraph.n).fill(-1), size = new Int32Array(globeGraph.n);
+  G.verts.forEach((set, v) => set.forEach((r) => { group[r] = v; size[r] = set.length; }));
+  const chosen = S.T.kind(S.sel) === "branch" ? new Set([S.T.t.u[S.sel], S.T.t.v[S.sel]]) : new Set();
+  return { group, size, chosen };
+}
+function draw() {
+  const [cx, cy] = centre(), scale = view.scale * baseScale;
+  proj.translate([cx, cy]).scale(scale).rotate([view.lambda, view.phi]).clipExtent(scale > Math.min(W, H) / 2 ? [[-8, -8], [W + 8, H + 8]] : null);
+  ctr = [-view.lambda, -view.phi];
+  reach = Math.min(Math.PI / 2, Math.asin(Math.min(1, (Math.hypot(W, H) / 2 + 40) / scale)) + 0.03);
+  const lod = lodFor(view.scale), land = pick("natural_earth", lod, W3);
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.beginPath(); gpath({ type: "Sphere" }); ctx.fillStyle = C.ocean; ctx.fill();
+  ctx.beginPath(); gpath(graticule); ctx.strokeStyle = C.graticule; ctx.lineWidth = 0.6; ctx.stroke();
+  if (land) { ctx.beginPath(); trace(land); ctx.fillStyle = C.land; ctx.fill(); }
+  const g = globeGraph;
+  if (!g) return;
+  const world = g.kind === "world";
+  const units = world ? pick(g.id, lod, W3) : pick(g.id, "hi", []);
+  const sg = stepGroups();
+  if (units) {
+    if (sg) {                              // the selected step: regions in it, merged ones shaded, the chosen edge in amber
+      const buckets = new Map();
+      units.forEach((u, r) => {
+        const v = sg.group[r];
+        const fill = v < 0 ? C["muted-fill"] : sg.chosen.has(v) ? C["accent-mid"] : mergedFill(sg.size[r]);
+        if (!buckets.has(fill)) buckets.set(fill, []);
+        buckets.get(fill).push(u);
+      });
+      for (const [fill, us] of buckets) { ctx.beginPath(); trace(us); ctx.fillStyle = fill; ctx.fill(); }
+    } else if (!world) { ctx.beginPath(); trace(units); ctx.fillStyle = C["land-hi"]; ctx.fill(); }
+  }
+  if (units && (!world || sg)) { ctx.beginPath(); trace(units); ctx.strokeStyle = C.border; ctx.lineWidth = 0.6; ctx.stroke(); }
+  else if (land) { ctx.beginPath(); trace(land); ctx.strokeStyle = C["border-faint"]; ctx.lineWidth = 0.5; ctx.stroke(); }
+  // graph: edges + vertices
+  const k = Math.pow(view.scale, 0.15);
+  const hi = hover >= 0 ? new Set(g.adj[hover]) : null;
+  ctx.globalAlpha = hi ? 0.35 : 0.8;
+  ctx.beginPath(); gpath(g.lines); ctx.strokeStyle = C.ink; ctx.lineWidth = 0.9 * k; ctx.stroke();
+  ctx.globalAlpha = 1;
+  const r = (world ? 2 : 2.8) * k;
+  const [l0, p0] = [ctr[0] * Math.PI / 180, ctr[1] * Math.PI / 180], sp0 = Math.sin(p0), cp0 = Math.cos(p0), lim = Math.cos(Math.PI / 2 - 0.01);
+  screen = g.nodes.map((nd) => {
+    const l = nd[2] * Math.PI / 180, p = nd[3] * Math.PI / 180;
+    return sp0 * Math.sin(p) + cp0 * Math.cos(p) * Math.cos(l - l0) > lim ? proj([nd[2], nd[3]]) : null;
+  });
+  ctx.beginPath();
+  for (let i = 0; i < screen.length; i++) {
+    const p = screen[i];
+    if (!p || i === hover) continue;
+    ctx.moveTo(p[0] + r, p[1]); ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+  }
+  ctx.fillStyle = C.ink; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = C.panel; ctx.stroke();
+  if (hover >= 0 && screen[hover]) {
+    const p = screen[hover];
+    ctx.beginPath(); ctx.arc(p[0], p[1], r * 1.8, 0, 2 * Math.PI); ctx.fillStyle = C.accent; ctx.fill(); ctx.strokeStyle = C.panel; ctx.stroke();
+  }
+}
+function frameLoop(t) {
+  const dt = lastT ? Math.min(t - lastT, 50) : 16; lastT = t;
+  if (flight) {
+    const u = flight.dur ? Math.min(1, (t - flight.t0) / flight.dur) : 1;
+    flight.step(u); dirty = true;
+    if (u >= 1) flight = null;
+  } else if (!reduce && !interacting && !document.hidden && globeGraph && globeGraph.kind === "world" && $("m-draw").getAttribute("aria-pressed") !== "true") {
+    view.lambda += dt * 0.005; dirty = true;
+  }
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(frameLoop);
+}
+function prepare(g) {
+  if (g.adj) return g;
+  g.adj = Array.from({ length: g.n }, () => []);
+  const lines = [];
+  for (const [a, b] of g.edges) {
+    g.adj[a].push(b); g.adj[b].push(a);
+    lines.push([[g.nodes[a][2], g.nodes[a][3]], [g.nodes[b][2], g.nodes[b][3]]]);
+  }
+  g.lines = { type: "MultiLineString", coordinates: lines };
+  return g;
+}
+function showGlobe(g, fly) {
+  globeGraph = prepare(g); hover = -1;
+  if (g.kind === "country") want(g.id, "hi");
+  $("to-world").hidden = g.kind === "world";
+  $("globe-hint").textContent = g.kind === "world" ? "Click a country’s vertex to open it" : "";
+  if (fly) flyTo(fit(g));
+  dirty = true;
+}
+$("to-world").addEventListener("click", () => showGlobe(byId.get("un195"), true));
+
+const zoomBy = (f) => { flight = null; view.scale = Math.min(Math.max(view.scale * f, 0.6), 2000); dirty = true; };
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX, y: e.clientY, moved: 0 }; interacting = true; flight = null;
+  canvas.classList.add("dragging");
+});
+canvas.addEventListener("pointermove", (e) => {
+  const rect = canvas.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+  if (drag) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+    const deg = 180 / Math.PI / (view.scale * baseScale);
+    view.lambda += dx * deg; view.phi = Math.max(-89, Math.min(89, view.phi - dy * deg));
+    dirty = true; return;
+  }
+  const i = nearest(x, y);
+  if (i !== hover) { hover = i; dirty = true; }
+  interacting = i >= 0;
+  if (i < 0) { hideTip(); canvas.style.cursor = ""; return; }
+  const nd = globeGraph.nodes[i], drill = globeGraph.kind === "world" && nd[4] && byId.has(nd[4]);
+  showTip(e, `${esc(nd[1])} <small>(${esc(nd[0])}): ${globeGraph.adj[i].length} neighbours${drill ? `, ${byId.get(nd[4]).n} subdivisions` : ""}</small>`);
+  canvas.style.cursor = drill ? "pointer" : "";
+});
+canvas.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  const rect = canvas.getBoundingClientRect();
+  if (drag.moved < 5) {
+    const i = nearest(e.clientX - rect.left, e.clientY - rect.top);
+    const nd = i >= 0 ? globeGraph.nodes[i] : null;
+    if (nd && globeGraph.kind === "world" && nd[4] && byId.has(nd[4])) loadGraph(nd[4]);
+  }
+  drag = null; interacting = false; canvas.classList.remove("dragging");
+});
+canvas.addEventListener("pointercancel", () => { drag = null; interacting = false; canvas.classList.remove("dragging"); });
+canvas.addEventListener("pointerleave", () => { if (!drag) { interacting = false; if (hover >= 0) { hover = -1; dirty = true; } hideTip(); } });
+function nearest(x, y) {
+  let best = -1, bd = 12 * 12;
+  for (let i = 0; i < screen.length; i++) {
+    const p = screen[i]; if (!p) continue;
+    const d = (p[0] - x) ** 2 + (p[1] - y) ** 2;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+function showTip(e, html) {
+  const tip = $("tip");
+  tip.innerHTML = html; tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - w - 8) + "px";
+  tip.style.top = Math.min(e.clientY + 14, innerHeight - h - 8) + "px";
+}
+function hideTip() { $("tip").hidden = true; }
+
+// ---- search ------------------------------------------------------------------------------------------------
+let matches = [], active = 0;
+function renderResults() {
+  const q = $("search").value.trim().toLowerCase();
+  const all = [byId.get("un195"), byId.get("natural_earth"), ...countries];
+  matches = q ? all.filter((g) => (WORLD_NAME[g.id] || g.name).toLowerCase().includes(q) || g.id.toLowerCase() === q).slice(0, 40) : [];
+  active = 0;
+  const ul = $("results");
+  ul.hidden = !matches.length;
+  $("search").setAttribute("aria-expanded", String(!!matches.length));
+  ul.innerHTML = matches.map((g, i) => `<li role="option" id="opt-${i}" data-id="${g.id}" aria-selected="${i === active}"><span>${esc(WORLD_NAME[g.id] || g.name)}</span><small>${g.kind === "country" ? g.id : ""}</small></li>`).join("");
+}
+$("search").addEventListener("input", renderResults);
+$("search").addEventListener("keydown", (e) => {
+  if (!matches.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    active = (active + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+    $("results").querySelectorAll("li").forEach((li, i) => li.setAttribute("aria-selected", String(i === active)));
+    $("search").setAttribute("aria-activedescendant", "opt-" + active);
+  } else if (e.key === "Enter") { e.preventDefault(); choose(matches[active].id); }
+  else if (e.key === "Escape") { $("results").hidden = true; }
+});
+$("results").addEventListener("mousedown", (e) => { const li = e.target.closest("li"); if (li) { e.preventDefault(); choose(li.dataset.id); } });
+$("search").addEventListener("blur", () => setTimeout(() => { $("results").hidden = true; }, 100));
+function choose(id) { $("search").value = ""; $("results").hidden = true; setMode("globe"); loadGraph(id); }
+
+// ---- loading a graph -------------------------------------------------------------------------------------
+function loadGraph(id) {
+  const g = byId.get(id);
+  if (!g) return;
+  if (S.busy) stopEngine(), setBusy(false);
+  S.graph = { key: g.id, id: g.id, kind: g.kind, name: WORLD_NAME[g.id] || g.name, level: g.level, n: g.n,
+              edges: g.edges.map(([a, b]) => [a, b]), nodes: g.nodes, geo: true, src: g };
+  showGlobe(g, true);
+  const prev = (S.history.get(g.id) || []).find((h) => h.selector === S.selector && h.cache === S.cache);
+  try { history.replaceState(null, "", "#" + id); } catch (e) {}
+  if (prev) { status(""); setRun(prev.result); return; }
+  S.run = null; S.T = null; S.sel = -1;
+  renderHero(); renderHistory(); renderTree(); renderStep();
+  if (autoRun(g)) compute();
+  else {
+    status("");
+    $("stage-msg").innerHTML = g.kind === "world"
+      ? `The world graph has ${g.n} vertices. With the learned policy its tree has about 117,000 steps: roughly two minutes and 700 MB of memory in a desktop browser.`
+      : `${esc(g.name)} has ${g.n} vertices; its tree may be very large.`;
+    status(`Press Compute to run it.`);
+  }
+}
+
+// ---- draw mode ---------------------------------------------------------------------------------------------
+const D = { pos: [], edges: [], tool: "vertex", from: -1, moving: -1 };
+const svgC = d3.select("#canvas");
+function setMode(m) {
+  $("m-globe").setAttribute("aria-pressed", m === "globe");
+  $("m-draw").setAttribute("aria-pressed", m === "draw");
+  $("globe-pane").hidden = m !== "globe"; $("draw-pane").hidden = m !== "draw";
+  $("search-wrap").hidden = m !== "globe";
+  if (m === "globe") resize();
+  if (m === "draw") { drawCanvas(); if (D.pos.length) useDrawn(); }
+  else if (S.graph && S.graph.kind === "drawn" && globeGraph) loadGraph(globeGraph.kind === "country" ? globeGraph.id : "CO");
+  dirty = true;
+}
+$("m-globe").addEventListener("click", () => setMode("globe"));
+$("m-draw").addEventListener("click", () => setMode("draw"));
+document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => {
+  D.tool = b.dataset.tool; D.from = -1;
+  document.querySelectorAll("[data-tool]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  $("draw-hint").textContent = { vertex: "Click to place a vertex. Drag from one vertex to another to join them.",
+    edge: "Click two vertices to join them, or click an edge to remove it.", move: "Drag vertices to move them.",
+    erase: "Click a vertex or an edge to remove it." }[D.tool];
+  drawCanvas();
+}));
+function canvasPoint(e) {
+  const r = $("canvas").getBoundingClientRect();
+  return [Math.max(0.02, Math.min(0.98, (e.clientX - r.left) / r.width)), Math.max(0.02, Math.min(0.98, (e.clientY - r.top) / r.height))];
+}
+function hitVertex(p) {
+  const r = $("canvas").getBoundingClientRect();
+  let best = -1, bd = 14 * 14;
+  D.pos.forEach((q, i) => { const d = ((q[0] - p[0]) * r.width) ** 2 + ((q[1] - p[1]) * r.height) ** 2; if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function drawCanvas(ghost) {
+  const r = $("canvas").getBoundingClientRect(), w = r.width || 340, h = r.height || 280;
+  svgC.attr("viewBox", `0 0 ${w} ${h}`);
+  let s = "";
+  D.edges.forEach(([a, b], j) => {
+    const [x1, y1] = [D.pos[a][0] * w, D.pos[a][1] * h], [x2, y2] = [D.pos[b][0] * w, D.pos[b][1] * h];
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C.ink}" stroke-opacity=".6" stroke-width="1.4"/>`
+      + `<line data-edge="${j}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" stroke-width="12" style="cursor:pointer"/>`;
+  });
+  if (ghost) s += `<line x1="${D.pos[ghost[0]][0] * w}" y1="${D.pos[ghost[0]][1] * h}" x2="${ghost[1][0] * w}" y2="${ghost[1][1] * h}" stroke="${C.accent}" stroke-width="1.6" stroke-dasharray="4 3"/>`;
+  D.pos.forEach(([x, y], i) => {
+    s += `<circle cx="${x * w}" cy="${y * h}" r="7" fill="${i === D.from ? C.accent : C.panel}" stroke="${C.ink}" stroke-width="1.4"/>`
+      + `<text x="${x * w}" y="${y * h}" dy="0.35em" text-anchor="middle" font-size="8.5" font-family="Geist, sans-serif" fill="${i === D.from ? C.panel : C.ink}" pointer-events="none">${i}</text>`;
+  });
+  $("canvas").innerHTML = s;
+}
+let downAt = null;
+$("canvas").addEventListener("pointerdown", (e) => {
+  const p = canvasPoint(e), v = hitVertex(p);
+  $("canvas").setPointerCapture(e.pointerId);
+  downAt = { p, v, moved: false };
+  if (D.tool === "move" && v >= 0) D.moving = v;
+});
+$("canvas").addEventListener("pointermove", (e) => {
+  if (!downAt) return;
+  const p = canvasPoint(e);
+  downAt.moved = downAt.moved || Math.hypot(p[0] - downAt.p[0], p[1] - downAt.p[1]) > 0.01;
+  if (D.moving >= 0) { D.pos[D.moving] = p; drawCanvas(); }
+  else if (D.tool === "vertex" && downAt.v >= 0 && downAt.moved) drawCanvas([downAt.v, p]);
+});
+$("canvas").addEventListener("pointerup", (e) => {
+  if (!downAt) return;
+  const p = canvasPoint(e), v = hitVertex(p), start = downAt;
+  downAt = null;
+  const edgeHit = e.target.dataset && e.target.dataset.edge != null ? +e.target.dataset.edge : -1;
+  let changed = false;
+  if (D.tool === "move") { changed = D.moving >= 0 && start.moved; D.moving = -1; }
+  else if (D.tool === "vertex") {
+    if (start.v >= 0 && v >= 0 && v !== start.v) changed = addEdge(start.v, v);
+    else if (start.v < 0 && !start.moved && D.pos.length < 40) { D.pos.push(p); changed = true; }
+  } else if (D.tool === "edge") {
+    if (v >= 0) {
+      if (D.from < 0) D.from = v;
+      else { if (v !== D.from) changed = addEdge(D.from, v); D.from = -1; }
+    } else if (edgeHit >= 0) { D.edges.splice(edgeHit, 1); changed = true; }
+  } else if (D.tool === "erase") {
+    if (v >= 0) {
+      D.edges = D.edges.filter(([a, b]) => a !== v && b !== v).map(([a, b]) => [a > v ? a - 1 : a, b > v ? b - 1 : b]);
+      D.pos.splice(v, 1); changed = true;
+    } else if (edgeHit >= 0) { D.edges.splice(edgeHit, 1); changed = true; }
+  }
+  drawCanvas();
+  if (changed) useDrawn();
+});
+function addEdge(a, b) {
+  const e = a < b ? [a, b] : [b, a];
+  if (D.edges.some(([x, y]) => x === e[0] && y === e[1])) return false;
+  D.edges.push(e); return true;
+}
+$("d-clear").addEventListener("click", () => { D.pos = []; D.edges = []; drawCanvas(); useDrawn(); });
+document.querySelectorAll("[data-gen]").forEach((b) => b.addEventListener("click", () => {
+  const n = Math.max(1, Math.min(40, +$("d-n").value || 8)), kind = b.dataset.gen;
+  const ring = (m, rad, off = 0) => d3.range(m).map((i) => [0.5 + rad * Math.cos(2 * Math.PI * i / m - Math.PI / 2 + off), 0.5 + rad * 1.0 * Math.sin(2 * Math.PI * i / m - Math.PI / 2 + off)]);
+  let pos = [], edges = [];
+  if (kind === "cycle") { pos = ring(n, 0.4); edges = d3.range(n).map((i) => [i, (i + 1) % n]); }
+  else if (kind === "complete") { pos = ring(n, 0.4); for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) edges.push([i, j]); }
+  else if (kind === "wheel") { pos = [[0.5, 0.5], ...ring(n - 1, 0.4)]; for (let i = 1; i < n; i++) edges.push([0, i], [i, i === n - 1 ? 1 : i + 1]); }
+  else if (kind === "grid") {
+    const c = Math.ceil(Math.sqrt(n)), rws = Math.ceil(n / c);
+    for (let i = 0; i < n; i++) pos.push([0.12 + 0.76 * (i % c) / Math.max(1, c - 1), 0.12 + 0.76 * Math.floor(i / c) / Math.max(1, rws - 1)]);
+    for (let i = 0; i < n; i++) { if (i % c < c - 1 && i + 1 < n) edges.push([i, i + 1]); if (i + c < n) edges.push([i, i + c]); }
+  } else if (kind === "petersen") {
+    pos = [...ring(5, 0.42), ...ring(5, 0.2)];
+    for (let i = 0; i < 5; i++) edges.push([i, (i + 1) % 5], [i, i + 5], [5 + i, 5 + (i + 2) % 5]);
+  } else {
+    pos = ring(n, 0.4);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (Math.random() < 0.3) edges.push([i, j]);
+  }
+  D.pos = pos; D.edges = edges.map(([a, b]) => a < b ? [a, b] : [b, a]);
+  D.from = -1; drawCanvas(); useDrawn();
+}));
+let drawnSeq = 0;
+function useDrawn() {                     // the graph changes as you draw; it is only computed on Compute
+  if (S.busy) stopEngine(), setBusy(false);
+  S.graph = { key: "drawn:" + (++drawnSeq), kind: "drawn", name: "A graph of your own", n: D.pos.length,
+              edges: D.edges.map((e) => e.slice()), pos: D.pos.map((p) => p.slice()), geo: false };
+  S.run = null; S.T = null; S.sel = -1;
+  try { history.replaceState(null, "", "#draw"); } catch (e) {}
+  renderHero(); renderHistory(); renderTree(); renderStep();
+  $("stage-msg").textContent = D.pos.length ? "Press Compute to find its polynomial and its tree." : "Draw a graph on the left.";
+  status("");
+}
+
+// ---- start ---------------------------------------------------------------------------------------------------
+syncControls();
+let savedView = "radial";
+try { savedView = localStorage.getItem("chromatic-view-2") || "radial"; } catch (e) {}
+try { setPalette(localStorage.getItem("chromatic-palette-2") || "size"); } catch (e) { setPalette("size"); }
+try { const o = JSON.parse(localStorage.getItem("chromatic-look") || "{}"); setLook({ glow: !!o.glow, hideLabels: !!o.hideLabels }); } catch (e) {}
+setView(savedView === "tree" ? "tree" : "radial");
+renderStep();
+requestAnimationFrame(frameLoop);
+const start = (location.hash || "").slice(1);
+if (start === "draw") { setMode("draw"); document.querySelector('[data-gen="petersen"]').click(); }
+else {
+  const id = byId.has(start) ? start : "CO";
+  loadGraph(id);
+  const f = fit(byId.get(id));
+  flight = null; view.lambda = -f.lon; view.phi = -f.lat; view.scale = f.scale / baseScale;
+}
+
+// ---- about panel ----------------------------------------------------------------------------------
+// Opens on a first visit; closing it is remembered. The tree refits beside it.
+function showAbout(on) {
+  $("about-panel").hidden = !on; $("about").setAttribute("aria-expanded", on);
+  $("stage").classList.toggle("about-open", on);
+  try { localStorage.setItem("chromatic-about-closed", on ? "0" : "1"); } catch (e) {}
+  if (S.T) fitTree(true);
+}
+$("about").addEventListener("click", () => showAbout(true));
+$("about-close").addEventListener("click", () => { showAbout(false); $("about").focus(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("about-panel").hidden && $("about-panel").contains(document.activeElement)) { showAbout(false); $("about").focus(); }
+});
+{ let closed = false; try { closed = localStorage.getItem("chromatic-about-closed") === "1"; } catch (e) {}
+  // Not on phones, where the panel would fill the whole tree.
+  if (!closed && !matchMedia("(max-width: 900px)").matches) { $("about-panel").hidden = false; $("about").setAttribute("aria-expanded", true); $("stage").classList.add("about-open"); } }
+window.__chromatic = { S, replay, selectStep, loadGraph, setView, setPalette, setLook, drawRadial, setRun };
+})();
+</script>
+</body>
+</html>

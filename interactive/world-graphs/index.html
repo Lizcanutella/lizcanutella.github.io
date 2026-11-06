@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>World graphs | Mateo Lizcano</title>
+<meta name="description" content="The land-border graphs of the world's countries and their regions, on a globe you can spin, search and export.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<style>
+/* One bright paper theme, matched to lizcanomateo.com (paper, ink, amber). */
+:root {
+  color-scheme: light;
+  --paper: #fcfbf8; --panel: #ffffff; --ink: #1a1917; --line: #e8e4db;
+  --accent: #b45309; --accent-bright: #d97706; --accent-wash: #fbf3e6;
+  --ocean: #f3efe6; --graticule: #e9e4d8; --land: #ffffff; --land-hi: #fbf3e6;
+  --border: #b9b1a2; --border-faint: #e1dbcf;
+  --edge: #1a1917; --node: #1a1917; --node-ring: #ffffff; --unc: #d97706;
+  --shadow: 0 1px 2px rgb(26 25 23 / .05), 0 8px 24px rgb(26 25 23 / .06);
+  --display: "Newsreader", Georgia, "Times New Roman", serif;
+  --body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased; overflow: hidden; display: flex; flex-direction: column; }
+.app { display: grid; grid-template-columns: 312px minmax(0, 1fr); flex: 1; min-height: 0; }
+.stage { position: relative; min-width: 0; min-height: 0; }
+#globe { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#globe.dragging { cursor: grabbing; }
+.overlay { position: absolute; left: 16px; top: 16px; right: 16px; display: flex; flex-direction: column;
+  gap: 10px; align-items: flex-start; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow);
+  padding: 14px 16px; max-width: 340px; }
+.card h1 { font: 500 27px/1.1 var(--display); letter-spacing: -.01em; margin: 0 0 8px; }
+.card h1 .sub { display: inline-block; font: 400 13px var(--body); letter-spacing: .01em; color: var(--ink); }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; font-variant-numeric: tabular-nums; }
+.stats div { display: flex; gap: 5px; align-items: baseline; }
+.stats dt { color: var(--ink); font-size: 12.5px; }
+.stats dt::after { content: ":"; font: 12.5px var(--body); }
+.stats dd { margin: 0; font-weight: 600; }
+.stats .flag dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.report { display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--ink); }
+.report:hover { color: var(--accent); }
+.controls { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.export { position: relative; }
+.menu { position: absolute; left: calc(100% + 6px); top: 0; z-index: 3; min-width: 210px; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow); padding: 4px 0; }
+.menu button { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; border: 0; background: none;
+  padding: 6px 12px; font: 500 13px var(--body); color: var(--ink); text-align: left; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: var(--accent-wash); outline: none; }
+.menu small { font: 400 11.5px var(--body); color: var(--ink); }
+.chip { font: 500 13px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 4px; padding: 5px 12px 5px 9px; cursor: pointer; display: inline-flex; align-items: center;
+  gap: 7px; box-shadow: var(--shadow); }
+.chip:hover { border-color: var(--border-faint); background: var(--accent-wash); }
+.chip::before { content: ""; width: 12px; height: 12px; box-sizing: border-box; border-radius: 2px; border: 1.5px solid var(--ink);
+  display: grid; place-items: center; font: 700 9px/1 var(--body); color: var(--panel); }
+.chip[aria-pressed="true"]::before { content: "✓"; background: var(--ink); }
+/* the one main action: solid ink */
+.chip.solid { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip.solid:hover { background: #33302b; border-color: #33302b; }
+/* About: a round "?" in the top right that widens into a labelled button on hover or focus */
+.about { position: absolute; right: 16px; top: 16px; z-index: 3; height: 36px; min-width: 36px; padding: 0; box-sizing: border-box;
+  display: inline-grid; place-items: center; font: 500 13px var(--body); color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--ink); border-radius: 999px; cursor: pointer; overflow: hidden; white-space: nowrap;
+  max-width: 36px; transition: max-width .2s ease, padding .2s ease; }
+.about > span { grid-area: 1 / 1; transition: opacity .15s; }
+.about .q { font: 500 18px/1 var(--display); }
+.about .t { opacity: 0; }
+.about:hover, .about:focus-visible { max-width: 120px; padding: 0 16px; background: var(--accent-wash); }
+.about:hover .q, .about:focus-visible .q { opacity: 0; }
+.about:hover .t, .about:focus-visible .t { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
+.about:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.app.info-open .about { display: none; }
+.chip.plain::before { display: none; }
+.chip.plain { padding-left: 12px; }
+.chip:focus-visible, .row:focus-visible, #search:focus-visible, .zoom button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 4px; padding: 6px 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 22px; height: 0; border-top: 1.5px solid var(--edge); display: inline-block; }
+.legend i.unc { border-top: 2px dashed var(--unc); }
+.legend i.inset { width: 16px; height: 11px; border: 1px solid var(--border); border-radius: 2px; }
+.zoom { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+.zoom button { font: 400 18px var(--body); width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer; box-shadow: var(--shadow); }
+.zoom button:hover { background: var(--accent-wash); }
+#tip { position: absolute; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 4px; padding: 5px 9px; font-size: 13px; box-shadow: var(--shadow); white-space: nowrap; z-index: 2; }
+#tip small, .row small { font-size: 11.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+aside { order: -1; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.search { padding: 18px 16px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.search label { font: 500 22px/1.1 var(--display); }
+#search { font: 14px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line);
+  border-radius: 4px; padding: 7px 10px; }
+.list { overflow-y: auto; padding-block: 4px 16px; flex: 1; min-height: 0; }
+.list h2 { font: 500 17px/1.2 var(--display); color: var(--ink); margin: 16px 16px 4px; }
+.row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline;
+  text-align: left; border: 0; background: none; color: var(--ink); font: 14px var(--body); padding: 5px 16px; cursor: pointer; }
+.row:hover { background: var(--accent-wash); }
+.row[aria-current="true"] { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
+.row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { margin: 16px; color: var(--ink); font: 15px var(--display); }
+.info { position: absolute; right: 16px; top: 16px; bottom: 16px; width: clamp(280px, calc(100% - 420px), 360px); z-index: 4;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: var(--shadow); }
+.info header { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 6px; }
+.info h2 { font: 500 27px/1.1 var(--display); letter-spacing: -.01em; margin: 0; }
+.info .close { border: 0; background: none; font: 400 22px/1 var(--body); color: var(--ink); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 4px; margin: -6px -8px 0 0; }
+.info .close:hover { background: var(--accent-wash); }
+.info .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.info .body { overflow-y: auto; padding: 0 16px 16px; font-size: 13.5px; line-height: 1.55; }
+.info p { margin: 0 0 10px; }
+.info .lead { font: 17px/1.4 var(--display); }
+.info h3 { font: 500 18px/1.2 var(--display); color: var(--ink); margin: 20px 0 6px; }
+.info ul { margin: 0; padding-left: 18px; }
+.info li { margin-bottom: 6px; }
+.info li::marker { color: var(--accent); }
+.info b { font-weight: 600; }
+.info .dash { display: inline-block; width: 18px; border-top: 2px dashed var(--unc); vertical-align: middle; margin: 0 2px; }
+.info .fine { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink); }
+.info a { color: var(--accent); }
+.app.info-open .zoom { right: calc(16px + clamp(280px, calc(100% - 420px), 360px) + 12px); }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 60fr) minmax(0, 40fr); }
+  aside { order: 0; border-right: 0; border-top: 1px solid var(--line); }
+  .overlay { right: 60px; }
+  .card { max-width: none; padding: 9px 12px; }
+  .card h1 { font-size: 21px; margin-bottom: 4px; }
+  .legend, .search label { display: none; }
+  .info { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 40%; border-radius: 0;
+    border-width: 1px 0 0; box-shadow: none; }
+  .app.info-open .zoom { right: 16px; }
+  .controls { flex-direction: row; flex-wrap: wrap; }
+  .menu { left: 0; top: calc(100% + 6px); }
+  .search { padding-top: 12px; }
+}
+</style>
+<!-- site-nav:head -->
+<link rel="icon" href="/icon.png" type="image/png" sizes="512x512">
+<link rel="apple-touch-icon" href="/apple-icon.png" type="image/png" sizes="180x180">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Newsreader:opsz,wght@6..72,400&display=swap">
+<style>
+.sn { position: sticky; top: 0; z-index: 50; flex: none; box-sizing: border-box;
+  background: color-mix(in srgb, #FCFBF8 88%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid #E8E4DB; font-size: 16px; line-height: 1.65; }
+.sn *, .sn *::before, .sn *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.sn-inner { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; height: 3.5rem;
+  display: flex; align-items: center; gap: 2rem; }
+.sn-mark { display: inline-flex; align-items: center; gap: .6rem; color: #1A1917; text-decoration: none; }
+.sn-mark:hover { color: #B45309; text-decoration: none; }
+.sn-mark img { display: block; height: 1.7rem; width: auto; }
+.sn-mark span { font-family: "Cinzel Decorative", Georgia, serif; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .14em; font-size: 1.02rem; line-height: 1; white-space: nowrap; }
+.sn nav { display: flex; align-items: baseline; gap: 1.25rem; margin-left: auto; overflow-x: auto; }
+.sn nav a { color: #1A1917; white-space: nowrap; text-decoration: none;
+  font-family: "Newsreader", Georgia, serif; font-size: 1.05rem; }
+.sn nav a:hover { color: #1A1917; text-decoration: none; }
+.sn nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.sn a:focus-visible { outline: 2px solid #B45309; outline-offset: 3px; border-radius: 2px; }
+@media (max-width: 700px) {
+  .sn-inner { gap: .5rem; padding: 0 1.25rem; }
+  .sn-mark span { display: none; }
+  .sn-mark img { height: 1.8rem; }
+  .sn nav { gap: .8rem; }
+  .sn nav a { font-size: .94rem; }
+  .sn nav a[href="/"] { display: none; }
+}
+</style>
+<!-- /site-nav:head -->
+</head>
+<body>
+<!-- site-nav:body -->
+<header class="sn"><div class="sn-inner"><a class="sn-mark" href="/" aria-label="Mateo Lizcano - home"><img src="/logo.svg" alt="" aria-hidden="true"><span>Mateo Lizcano</span></a><nav aria-label="Main"><a href="/">Home</a><a href="/work/">Research</a><a href="/interactive/" aria-current="page">Interactive</a><a href="/journey/">Journey</a></nav></div></header>
+<!-- /site-nav:body -->
+<div class="app">
+  <main class="stage">
+    <canvas id="globe" aria-label="Globe showing the selected adjacency graph"></canvas>
+    <div class="overlay">
+      <section class="card" aria-live="polite">
+        <h1><span id="title">Loading graphs…</span> <span class="sub" id="kind"></span></h1>
+        <dl class="stats" id="stats"></dl>
+        <a class="report" id="report" target="_blank" rel="noopener">Report a problem with this graph</a>
+      </section>
+      <div class="controls">
+        <button class="chip plain" id="back" hidden>← World</button>
+        <button class="chip" id="t-flat" aria-pressed="false" title="Lay the graph flat, without the globe and the map">Graph only</button>
+        <button class="chip" id="t-labels" aria-pressed="true">Codes</button>
+        <button class="chip" id="t-spin" aria-pressed="true">Spin</button>
+        <div class="export">
+          <button class="chip plain solid" id="export" aria-expanded="false" aria-controls="export-menu">Export graph as</button>
+          <div class="menu" id="export-menu" hidden>
+            <button data-fmt="png">PNG <small>this view, 4× resolution</small></button>
+            <button data-fmt="svg">SVG <small>vector drawing</small></button>
+            <button data-fmt="tikz">TikZ <small>LaTeX tikzpicture</small></button>
+            <button data-fmt="csv">CSV <small>edge list</small></button>
+            <button data-fmt="json">JSON <small>vertices and edges</small></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="legend"><span><i></i>border, confirmed</span><span><i class="unc"></i>one source</span><span id="leg-inset" hidden><i class="inset"></i>moved closer, not to scale</span></div>
+    <button class="about" id="about" aria-expanded="false" aria-controls="info" aria-label="About"><span class="q" aria-hidden="true">?</span><span class="t">About</span></button>
+    <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
+    <div id="tip" hidden></div>
+    <section class="info" id="info" aria-labelledby="info-title" hidden>
+      <header><h2 id="info-title">About</h2><button class="close" id="info-close" aria-label="Close">×</button></header>
+      <div class="body">
+        <p class="lead">The land-border graphs of the world. Each vertex is a country/state/region/etc., and two vertices
+          are joined when the regions share a land border.</p>
+        <h3>How the graphs were made</h3>
+        <ul>
+          <li><b>Regions</b> are Natural Earth's 1:10m units, named by their ISO 3166 codes. Where geoBoundaries
+            and Wikidata agree that Natural Earth has a region's code or name wrong, it is corrected.</li>
+          <li><b>Edges</b> are measured on the map: two regions are joined when they share more than 100 m of land
+            or river border, after lakes over 500 km² are cut out. Regions that meet at a single point (the US Four
+            Corners) or only across sea or an estuary are not joined.</li>
+          <li><b>Every edge was checked</b> against two independent sources: the geoBoundaries outlines and
+            Wikidata's "shares border with". The <b id="i-unc">1,168</b> of <b id="i-edges">9,418</b> edges
+            that only Natural Earth supports are drawn <span class="dash"></span> dashed.</li>
+          <li><b>Corrections:</b> 35 borders and two swapped pairs of codes that no rule could settle were decided by
+            hand, each with its evidence. Most are borders that Natural Earth's outlines shrink to a point.</li>
+        </ul>
+        <h3>Get the data</h3>
+        <p>Every graph, with the sources behind each edge, is on
+          <a href="https://github.com/Lizcanutella/world-graphs">github.com/Lizcanutella/world-graphs</a> as JSON, GraphML and CSV.</p>
+        <p>Not all graphs have been verified. If you spot a problem, click the <b>Report a problem with this
+          graph</b> button, and describe your issue. Look out for the <b style="white-space: nowrap">✓ verified</b> tag in the country card to
+          see whether the graph has been verified.</p>
+        <p class="fine">Data under CC BY 4.0, built from Natural Earth (public domain) and Wikidata (CC0). The
+          boundaries are Natural Earth's de facto view, not an endorsement.</p>
+      </div>
+    </section>
+  </main>
+  <aside>
+    <div class="search">
+      <label for="search">Region graphs</label>
+      <input id="search" type="search" placeholder="Country or ISO code" autocomplete="off">
+    </div>
+    <nav class="list" id="list" aria-label="Graphs"></nav>
+  </aside>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("globe"), ctx = canvas.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const proj = d3.geoOrthographic().clipAngle(90).precision(0.8);
+  const path = d3.geoPath(proj, ctx);
+  const graticule = d3.geoGraticule10();
+  // world layers come in three levels of detail; each is under ~1.5 px of error at the zoom it serves
+  const lodFor = (scale) => scale < 2 ? "lo" : scale < 8 ? "mid" : "hi";
+  let W = 0, H = 0, baseScale = 1, dirty = true;
+  const opts = { flat: false, labels: true, spin: !reduce };
+  const C = {};
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["paper", "ocean", "graticule", "land", "land-hi", "border", "border-faint", "edge", "node",
+                   "node-ring", "unc", "ink"])
+    C[k] = cs.getPropertyValue("--" + k).trim();
+  const LABEL_FONT = "500 10.5px Geist, system-ui, sans-serif";
+
+  // ---- data -------------------------------------------------------------------------------
+  const cache = new Map();
+  function borders(name) {                      // -> Promise<[pseudo-unit of lines]>, lines cull individually
+    const key = "b:" + name;
+    if (!cache.has(key))
+      cache.set(key, fetch("borders/" + name + ".json").then((r) => r.json()).then((o) => {
+        const parts = o.lines.map((r) => {
+          const pts = [];
+          for (let i = 0; i < r.length; i += 2) pts.push([r[i] / o.q, r[i + 1] / o.q]);
+          const f = { type: "LineString", coordinates: pts };
+          f.c = d3.geoCentroid(f);
+          f.r = 0;
+          for (const q of pts) f.r = Math.max(f.r, d3.geoDistance(f.c, q));
+          return f;
+        });
+        dirty = true;
+        return [{ parts, c: [0, 0], r: 4 }];
+      }));
+    return cache.get(key);
+  }
+  function outlines(name) {                     // -> Promise<features>, each with a bounding circle
+    if (!cache.has(name))
+      cache.set(name, fetch("outlines/" + name + ".json").then((r) => r.json()).then((o) => {
+        const fs = o.units.map((rings) => {
+          const polys = rings.map((r) => {
+            const pts = [];
+            for (let i = 0; i < r.length; i += 2) pts.push([r[i] / o.q, r[i + 1] / o.q]);
+            return [pts];
+          });
+          for (const p of polys)                // a ring wound the wrong way would fill the globe
+            if (d3.geoArea({ type: "Polygon", coordinates: p }) > 2 * Math.PI) p[0].reverse();
+          // each island gets its own bounding circle, so an archipelago culls part by part
+          const parts = polys.map((p) => {
+            const f = { type: "Polygon", coordinates: p };
+            f.c = d3.geoCentroid(f);
+            f.r = 0;
+            for (const q of p[0]) f.r = Math.max(f.r, d3.geoDistance(f.c, q));
+            return f;
+          });
+          const u = { parts };
+          u.c = d3.geoCentroid({ type: "MultiPolygon", coordinates: polys });
+          u.r = 0;
+          for (const f of parts) u.r = Math.max(u.r, d3.geoDistance(u.c, f.c) + f.r);
+          return u;
+        });
+        dirty = true;
+        return fs;
+      }));
+    return cache.get(name);
+  }
+  // Layers by kind (o = outlines, b = border lines), graph and level of detail, filled in as they
+  // arrive; `pick` falls back to any level already loaded so nothing blinks while one loads.
+  const layers = {};
+  function want(kind, id, lod) {
+    const k = kind + ":" + id + ":" + lod;
+    if (!(k in layers)) {
+      layers[k] = null;
+      const name = lod === "hi" ? id : id + "_" + lod;
+      (kind === "b" ? borders(name) : outlines(name)).then((f) => { layers[k] = f; dirty = true; });
+    }
+    return layers[k];
+  }
+  function pick(kind, id, lod, fallbacks) {
+    const got = want(kind, id, lod);
+    if (got) return got;
+    for (const l of fallbacks) if (layers[kind + ":" + id + ":" + l]) return layers[kind + ":" + id + ":" + l];
+    return null;
+  }
+  const W3 = ["lo", "mid", "hi"];
+  const [data] = await Promise.all([fetch("graphs.json").then((r) => r.json()), outlines("natural_earth_lo")]);
+  want("o", "natural_earth", "lo");
+  const byId = new Map(data.graphs.map((g) => [g.id, g]));
+
+  function prepare(g) {
+    if (g.prep) return g.prep;
+    const adj = Array.from({ length: g.n }, () => []);
+    const good = [], unc = [], goodE = [], uncE = [];
+    for (const [a, b, c] of g.edges) {
+      adj[a].push(b); adj[b].push(a);
+      (c ? good : unc).push([[g.nodes[a][2], g.nodes[a][3]], [g.nodes[b][2], g.nodes[b][3]]]);
+      (c ? goodE : uncE).push([a, b]);
+    }
+    g.prep = { adj, good: { type: "MultiLineString", coordinates: good }, goodE,
+               unc: { type: "MultiLineString", coordinates: unc }, uncE };
+    return g.prep;
+  }
+
+  // ---- view state -------------------------------------------------------------------------
+  const view = { lambda: -10, phi: -20, scale: 1 };
+  let lastWorld = "un195", current = null, hover = -1, screen = [], flight = null, lastT = 0, interacting = false;
+
+  function resize() {
+    const r = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    baseScale = Math.min(W, H) * (W < 520 ? 0.40 : 0.43);
+    dirty = true;
+  }
+  new ResizeObserver(() => { resize(); if (opts.flat && current) fitFlat(current); }).observe(canvas);
+  resize();
+
+  // with the About panel open beside it, the globe moves left by half the panel's width
+  let shift = 0, shiftTo = 0;
+  function centre() { return [W / 2 - shift, H / 2 + (W < 520 ? 24 : 16)]; }
+
+  function mainBody(g) {                       // centre and angular radius of a country's main body
+    const pts = g.nodes.map((nd) => [nd[2], nd[3]]);
+    const q = (xs, f) => xs.slice().sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(f * xs.length))];
+    const c0 = d3.geoCentroid({ type: "MultiPoint", coordinates: pts });
+    const cut = q(pts.map((p) => d3.geoDistance(c0, p)), 0.85) * 1.5 + 1e-4;
+    const core = pts.filter((p) => d3.geoDistance(c0, p) <= cut);
+    const c = d3.geoCentroid({ type: "MultiPoint", coordinates: core });
+    return { c, r: Math.max(...core.map((p) => d3.geoDistance(c, p))) };
+  }
+  function fit(g) {
+    if (g.kind === "world") return { lon: 10, lat: 20, scale: baseScale };
+    // Fit the main body of the country; far-flung islands (Galapagos, Hawaii) stay a drag away.
+    const { c, r } = mainBody(g);
+    const ang = Math.min(Math.max(r * 1.3, 0.004), 1.3);
+    return { lon: c[0], lat: c[1], scale: Math.min(W, H) * 0.38 / Math.sin(ang) };
+  }
+
+  function flyTo(target) {
+    const from = [-view.lambda, -view.phi], to = [target.lon, target.lat];
+    const dist = d3.geoDistance(from, to);
+    const s0 = view.scale * baseScale, s1 = target.scale;
+    const dur = reduce ? 0 : 900 + 700 * Math.min(1, dist / 2) + 250 * Math.min(1, Math.abs(Math.log(s1 / s0)) / 4);
+    const hop = Math.min(0.45, dist / 3);
+    const gi = d3.geoInterpolate(from, to);
+    flight = { t0: performance.now(), dur, step(t) {
+      const e = d3.easeCubicInOut(t), [lon, lat] = gi(e);
+      const s = Math.exp(Math.log(s0) + (Math.log(s1) - Math.log(s0)) * e) * (1 - hop * Math.sin(Math.PI * e));
+      view.lambda = -lon; view.phi = -lat; view.scale = Math.max(s, baseScale * 0.55) / baseScale;
+    } };
+  }
+
+  // ---- Graph only: the graph laid flat -----------------------------------------------------
+  // A world graph goes on an Equal Earth map, cut at 170° W where no border crosses. A country goes
+  // on an azimuthal equal-area map centred on its main body; groups of vertices far across the sea
+  // (overseas regions, remote islands) are moved in beside it as framed insets, keeping their
+  // direction, so the main body isn't shrunk to fit them. None of them has an edge to the mainland.
+  function layout(g) {
+    const P = prepare(g);
+    if (P.flat) return P.flat;
+    const ll = g.nodes.map((nd) => [nd[2], nd[3]]);
+    const proj2 = g.kind === "world" ? d3.geoEqualEarth().rotate([-10, 0])
+      : d3.geoAzimuthalEqualArea().rotate(mainBody(g).c.map((x) => -x));
+    const pts = ll.map((p) => proj2.scale(1).translate([0, 0])(p));
+    P.flat = { pts, insets: g.kind === "world" ? [] : pullIn(g, P, pts) };
+    return P.flat;
+  }
+  function pullIn(g, P, pts) {                  // moves far groups in place; returns their frames
+    const n = g.n, len = (p) => Math.hypot(p[0], p[1]);
+    const comp = new Int32Array(n).fill(-1), pieces = [];
+    for (let s = 0; s < n; s++) {
+      if (comp[s] >= 0) continue;
+      const vs = [s], st = [s]; comp[s] = pieces.length;
+      while (st.length) for (const u of P.adj[st.pop()]) if (comp[u] < 0) { comp[u] = pieces.length; vs.push(u); st.push(u); }
+      pieces.push(vs);
+    }
+    const mean = (vs) => [d3.mean(vs, (v) => pts[v][0]), d3.mean(vs, (v) => pts[v][1])];
+    const main = pieces.reduce((a, b) => b.length > a.length ? b : a);
+    const hasMain = main.length >= 0.25 * n;
+    // bearings and sizes are taken from the main body when there is one, else from the map's centre
+    const o = hasMain ? mean(main) : [0, 0], rel = (p) => [p[0] - o[0], p[1] - o[1]];
+    const R = Math.max(d3.quantile((hasMain ? main : d3.range(n)).map((v) => len(rel(pts[v]))).sort(d3.ascending), 0.85), 1e-4);
+    let groups;
+    if (hasMain) {
+      // a main body: pieces not joined to it and well clear of it (Alaska, Borneo, the Canaries)
+      const span = Math.max(1e-4, Math.hypot(...[0, 1].map((i) => d3.max(main, (v) => pts[v][i]) - d3.min(main, (v) => pts[v][i]))));
+      const gap = (vs) => d3.min(vs, (v) => d3.min(main, (w) => Math.hypot(pts[v][0] - pts[w][0], pts[v][1] - pts[w][1])));
+      groups = pieces.filter((vs) => vs !== main && gap(vs) > 0.45 * span).map((vs) => ({ vs, m: mean(vs) }));
+    } else {                                    // an archipelago: only the outliers
+      groups = pieces.map((vs) => ({ vs, m: mean(vs) })).filter((gr) => len(rel(gr.m)) > 2.5 * R);
+    }
+    // far pieces close to each other move together (Guadeloupe with Martinique)
+    for (let merged = true; merged;) {
+      merged = false;
+      join: for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++)
+        if (Math.hypot(groups[i].m[0] - groups[j].m[0], groups[i].m[1] - groups[j].m[1]) < 0.6 * R) {
+          groups[i].vs.push(...groups[j].vs); groups[i].m = mean(groups[i].vs); groups.splice(j, 1);
+          merged = true; break join;
+        }
+    }
+    groups.sort((a, b) => len(rel(a.m)) - len(rel(b.m)));
+    const moving = new Set(groups.flatMap((gr) => gr.vs)), pad = 0.12 * R, frames = [];
+    const box = (vs) => [d3.min(vs, (v) => pts[v][0]) - pad, d3.min(vs, (v) => pts[v][1]) - pad,
+                         d3.max(vs, (v) => pts[v][0]) + pad, d3.max(vs, (v) => pts[v][1]) + pad];
+    const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+    for (const gr of groups) {                  // slide in along its bearing until it would touch something
+      const m = rel(gr.m), u = m.map((x) => x / len(m)), home = gr.vs.map((v) => pts[v].slice());
+      let placed = false;
+      for (let d = 0.5 * R; d < len(m) - 0.5 * R && !placed; d += 0.06 * R) {
+        gr.vs.forEach((v, j) => { pts[v] = [home[j][0] + o[0] + u[0] * d - gr.m[0], home[j][1] + o[1] + u[1] * d - gr.m[1]]; });
+        const b = box(gr.vs);
+        placed = !frames.some((f) => meets(f, b)) && !pts.some((p, v) => !moving.has(v) && p[0] > b[0] - pad && p[0] < b[2] + pad && p[1] > b[1] - pad && p[1] < b[3] + pad);
+      }
+      if (placed) frames.push(box(gr.vs));
+      else gr.vs.forEach((v, j) => { pts[v] = home[j]; });   // nowhere closer: leave it where it is
+    }
+    return frames;
+  }
+  const fv = { k: 1, x: 0, y: 0, k0: 1, area: [0, 0, 1, 1] };   // flat view: screen = plane * k + (x, y)
+  function fitFlat(g) {
+    const L = layout(g);
+    const xs = L.pts.map((p) => p[0]).concat(L.insets.flatMap((f) => [f[0], f[2]]));
+    const ys = L.pts.map((p) => p[1]).concat(L.insets.flatMap((f) => [f[1], f[3]]));
+    const [a, b] = d3.extent(xs), [c, d] = d3.extent(ys);
+    // fit beside the card and levers or below them, whichever draws the graph larger
+    const st = canvas.getBoundingClientRect();
+    const ov = [".card", ".controls"].map((q) => document.querySelector(q).getBoundingClientRect());
+    const right = Math.max(...ov.map((r) => r.right)) - st.left, bottom = Math.max(...ov.map((r) => r.bottom)) - st.top;
+    const scaleIn = ([x0, y0, x1, y1]) => Math.min((x1 - x0) / Math.max(b - a, 1e-6), (y1 - y0) / Math.max(d - c, 1e-6));
+    const info = $("info").hidden || narrow.matches ? null : $("info").getBoundingClientRect();
+    const xr = info ? info.left - st.left - 24 : W - 64;
+    const areas = [[right + 24, 24, xr, H - 56], [24, bottom + 16, xr, H - 56]].filter(([x0, y0, x1, y1]) => x1 > x0 + 80 && y1 > y0 + 80);
+    const [x0, y0, x1, y1] = fv.area = areas.length ? areas.reduce((p, q) => scaleIn(q) > scaleIn(p) ? q : p) : [0, 0, W, H];
+    fv.k = fv.k0 = scaleIn(fv.area);
+    fv.x = (x0 + x1) / 2 - fv.k * (a + b) / 2; fv.y = (y0 + y1) / 2 - fv.k * (c + d) / 2;
+    dirty = true;
+  }
+
+  // ---- drawing ----------------------------------------------------------------------------
+  // Only features whose bounding circle reaches the visible cap are streamed through d3, which
+  // is what keeps a zoomed-in country cheap; zoomed out, the coarse outlines keep spinning cheap.
+  let ctr = [0, 0], reach = Math.PI / 2;
+  const inView = (f) => d3.geoDistance(ctr, f.c) - f.r < reach;
+  function trace(fs) { for (const u of fs) if (inView(u)) for (const f of u.parts) if (inView(f)) path(f); }
+
+  function draw() {
+    if (opts.flat) return drawFlat();
+    const [cx, cy] = centre(), scale = view.scale * baseScale;
+    proj.translate([cx, cy]).scale(scale).rotate([view.lambda, view.phi])
+      .clipExtent(scale > Math.min(W, H) / 2 ? [[-8, -8], [W + 8, H + 8]] : null);
+    ctr = [-view.lambda, -view.phi];
+    // angular radius of the screen seen from the globe's centre point (corner distance, plus the
+    // centre offset and a margin); features wholly beyond it are skipped
+    reach = Math.min(Math.PI / 2, Math.asin(Math.min(1, (Math.hypot(W, H) / 2 + 40) / scale)) + 0.03);
+    const lod = lodFor(view.scale);
+    const land = pick("o", "natural_earth", lod, W3);
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+
+    ctx.beginPath(); path({ type: "Sphere" }); ctx.fillStyle = C.ocean; ctx.fill();
+    ctx.beginPath(); path(graticule); ctx.strokeStyle = C.graticule; ctx.lineWidth = 0.6; ctx.stroke();
+    if (land) { ctx.beginPath(); trace(land); ctx.fillStyle = C.land; ctx.fill(); }
+
+    const g = current;
+    if (g) {
+      const P = prepare(g);
+      const world = g.kind === "world";
+      // world borders come from line layers; only a selected country needs its unit outlines
+      const units = world ? null : pick("o", g.id, "hi", []);
+      if (units) { ctx.beginPath(); trace(units); ctx.fillStyle = C["land-hi"]; ctx.fill(); }
+      // land borders only: coastlines already read from the land fill
+      const b = pick("b", world ? g.id : "natural_earth", lod, W3);
+      if (b) {
+        ctx.beginPath(); trace(b);
+        ctx.strokeStyle = world ? C.border : C["border-faint"]; ctx.lineWidth = world ? 0.6 : 0.8; ctx.stroke();
+      }
+      if (!world && units) {                     // the selected country: full unit outlines
+        ctx.beginPath(); trace(units); ctx.strokeStyle = C.border; ctx.lineWidth = 0.8; ctx.stroke();
+      }
+      const cosLim = Math.cos(Math.PI / 2 - 0.01);
+      const [l0, p0] = [ctr[0] * Math.PI / 180, ctr[1] * Math.PI / 180];
+      const sp0 = Math.sin(p0), cp0 = Math.cos(p0);
+      screen = g.nodes.map((nd) => {            // cheap hemisphere test before projecting
+        const l = nd[2] * Math.PI / 180, p = nd[3] * Math.PI / 180;
+        return sp0 * Math.sin(p) + cp0 * Math.cos(p) * Math.cos(l - l0) > cosLim ? proj([nd[2], nd[3]]) : null;
+      });
+      drawGraph(g, P, Math.pow(view.scale, 0.18), (geo) => path(geo));
+    }
+  }
+
+  function drawFlat() {
+    ctx.clearRect(0, 0, W, H);
+    const g = current;
+    if (!g) return;
+    const P = prepare(g), L = layout(g), at = (p) => [p[0] * fv.k + fv.x, p[1] * fv.k + fv.y];
+    screen = L.pts.map(at);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    for (const f of L.insets) {                  // inset frames
+      const [a, b] = at([f[0], f[1]]), [c, d] = at([f[2], f[3]]);
+      ctx.beginPath(); ctx.roundRect(a, b, c - a, d - b, 3); ctx.strokeStyle = C.border; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    const segs = (geo) => {                      // straight edges between the flat positions
+      for (const [a, b] of geo === P.good ? P.goodE : P.uncE) { ctx.moveTo(...screen[a]); ctx.lineTo(...screen[b]); }
+    };
+    drawGraph(g, P, Math.pow(fv.k / fv.k0, 0.18), segs);
+  }
+
+  // `screen` holds each vertex's position (null when hidden); `edges(geo)` adds P.good or P.unc to the path
+  function drawGraph(g, P, k, edges) {
+    const hi = hover >= 0 ? new Set(P.adj[hover]) : null;
+    ctx.globalAlpha = hi ? 0.3 : 0.9;
+    ctx.beginPath(); edges(P.good); ctx.strokeStyle = C.edge; ctx.lineWidth = 1.1 * k; ctx.stroke();
+    ctx.globalAlpha = hi ? 0.4 : 1;
+    ctx.setLineDash([4 * k, 3 * k]);
+    ctx.beginPath(); edges(P.unc); ctx.strokeStyle = C.unc; ctx.lineWidth = 1.5 * k; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    if (hi) {
+      const a = g.nodes[hover];
+      ctx.beginPath();
+      if (opts.flat) for (const b of hi) { ctx.moveTo(...screen[hover]); ctx.lineTo(...screen[b]); }
+      else path({ type: "MultiLineString", coordinates: [...hi].map((b) => [[a[2], a[3]], [g.nodes[b][2], g.nodes[b][3]]]) });
+      ctx.strokeStyle = C.edge; ctx.lineWidth = 2.4 * k; ctx.stroke();
+    }
+
+    const r = (g.kind === "world" ? 2.4 : 3.2) * k;
+    // batch the plain vertices into one path; only highlighted ones are drawn separately
+    ctx.beginPath();
+    for (let i = 0; i < screen.length; i++) {
+      const p = screen[i];
+      if (!p || i === hover || (hi && hi.has(i))) continue;
+      ctx.moveTo(p[0] + r, p[1]); ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+    }
+    ctx.fillStyle = C.node; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = C["node-ring"]; ctx.stroke();
+    for (let i = 0; i < screen.length; i++) {
+      const p = screen[i];
+      if (!p || !(i === hover || (hi && hi.has(i)))) continue;
+      ctx.beginPath(); ctx.arc(p[0], p[1], r * 1.5, 0, 2 * Math.PI);
+      ctx.fillStyle = C.node; ctx.fill();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = C["node-ring"]; ctx.stroke();
+    }
+    if (opts.labels && g.kind === "country" && g.n <= 80) {
+      ctx.font = LABEL_FONT; ctx.textBaseline = "middle"; ctx.lineWidth = 3;
+      ctx.strokeStyle = C["node-ring"]; ctx.fillStyle = C.ink;
+      for (let i = 0; i < screen.length; i++) {
+        const p = screen[i];
+        if (!p) continue;
+        const code = g.nodes[i][0].replace(/^[A-Z]{2}-/, "");
+        ctx.strokeText(code, p[0] + r + 3, p[1]); ctx.fillText(code, p[0] + r + 3, p[1]);
+      }
+    }
+  }
+
+  function frame(t) {
+    const dt = lastT ? Math.min(t - lastT, 50) : 16; lastT = t;
+    if (shift !== shiftTo) {
+      shift += (shiftTo - shift) * (reduce ? 1 : Math.min(1, dt / 120));
+      if (Math.abs(shift - shiftTo) < 0.5) shift = shiftTo;
+      dirty = true;
+    }
+    if (flight) {
+      const u = flight.dur ? Math.min(1, (t - flight.t0) / flight.dur) : 1;
+      flight.step(u); dirty = true;
+      if (u >= 1) flight = null;
+    } else if (opts.spin && !opts.flat && !interacting && !document.hidden && current && current.kind === "world") {
+      view.lambda += dt * 0.006; dirty = true;
+    }
+    if (dirty) { dirty = false; draw(); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- panel + list -----------------------------------------------------------------------
+  const countries = data.graphs.filter((g) => g.kind === "country").sort((a, b) => a.name.localeCompare(b.name));
+  const worlds = data.graphs.filter((g) => g.kind === "world");
+  const WORLD_LABEL = { un195: "UN members + 2", natural_earth: "All Natural Earth polities" };
+  const WORLD_NAME = { un195: "The world (UN members + 2)", natural_earth: "The world (every Natural Earth polity)" };
+  const LEVEL = (g) => g.kind === "world" ? "Countries"
+    : (g.level ? g.level[0].toUpperCase() + g.level.slice(1).replace("|", " / ") : "Subdivisions");
+
+  function renderList(q) {
+    q = q.trim().toLowerCase();
+    const match = (g) => !q || g.name.toLowerCase().includes(q) || g.id.toLowerCase() === q;
+    const row = (g, label) => `<button class="row" data-id="${g.id}" aria-current="${current && current.id === g.id}">
+        <span class="nm">${label || g.name}</span><small>${g.kind === "country" ? g.id + " " : ""}(${g.n} ${g.n === 1 ? "vertex" : "vertices"})</small></button>`;
+    const w = worlds.filter(match), c = countries.filter(match);
+    $("list").innerHTML =
+      (w.length ? `<h2>World</h2>` + w.map((g) => row(g, WORLD_LABEL[g.id])).join("") : "") +
+      (c.length ? `<h2>Countries: ${c.length}</h2>` + c.map((g) => row(g)).join("") : "") +
+      (!w.length && !c.length ? `<p class="empty">No graph matches “${q.replace(/[<&]/g, "")}”.</p>` : "");
+  }
+  $("list").addEventListener("click", (e) => {
+    const b = e.target.closest(".row");
+    if (b) select(b.dataset.id, true);
+  });
+  $("search").addEventListener("input", (e) => renderList(e.target.value));
+
+  const REPO = "https://github.com/Lizcanutella/world-graphs";
+  function renderCard(g) {
+    $("kind").textContent = `${LEVEL(g)} (${g.n} ${g.n === 1 ? "vertex" : "vertices"}, ${g.m} ${g.m === 1 ? "edge" : "edges"})`;
+    $("title").textContent = WORLD_NAME[g.id] || g.name;
+    const stat = (k, v, cls) => `<div><dt${cls ? ` class="${cls}"` : ""}>${k}</dt><dd>${v}</dd></div>`;
+    $("stats").innerHTML = (g.unc ? stat("one source", g.unc) : "") +
+      (g.verified ? `<div class="flag"><dt>Status</dt><dd>✓ verified</dd></div>` : "");
+    const name = WORLD_NAME[g.id] || g.name, label = `${g.id} (${name})`;
+    $("report").href = `${REPO}/issues/new?` + new URLSearchParams({
+      template: "graph-problem.yml", title: `[graph] ${name}: `, graph: label });
+    $("back").hidden = g.kind === "world";
+    $("t-labels").hidden = g.kind === "world";
+    syncSpin();
+  }
+
+  function select(id, fly) {
+    const g = byId.get(id);
+    if (!g) return;
+    if (g.kind === "world") lastWorld = id;
+    current = g; hover = -1; $("tip").hidden = true;
+    const P = prepare(g);
+    if (g.kind === "country") want("o", g.id, "hi");
+    renderCard(g);
+    renderList($("search").value);
+    const row = document.querySelector(`.row[data-id="${id}"]`);
+    if (row) row.scrollIntoView({ block: "nearest" });
+    if (opts.flat) {                            // lay it flat now; the globe waits where the graph is
+      fitFlat(g);
+      const f = fit(g); view.lambda = -f.lon; view.phi = -f.lat; view.scale = f.scale / baseScale;
+    } else if (fly) flyTo(fit(g));
+    $("leg-inset").hidden = !(opts.flat && layout(g).insets.length);
+    try { history.replaceState(null, "", "#" + id); } catch (e) {}
+    dirty = true;
+  }
+
+  // ---- controls ---------------------------------------------------------------------------
+  const syncSpin = () => { $("t-spin").hidden = opts.flat || !current || current.kind !== "world"; };
+  for (const [id, key] of [["t-flat", "flat"], ["t-labels", "labels"], ["t-spin", "spin"]]) {
+    const b = $(id);
+    b.setAttribute("aria-pressed", opts[key]);
+    b.addEventListener("click", () => {
+      opts[key] = !opts[key]; b.setAttribute("aria-pressed", opts[key]); dirty = true;
+      if (key === "flat") {
+        flight = null; hover = -1; $("tip").hidden = true; syncSpin();
+        if (opts.flat) fitFlat(current);
+        $("leg-inset").hidden = !(opts.flat && layout(current).insets.length);
+        canvas.setAttribute("aria-label", opts.flat ? "The selected adjacency graph, laid flat" : "Globe showing the selected adjacency graph");
+      }
+    });
+  }
+  $("back").addEventListener("click", () => select(lastWorld, true));
+  const zoomBy = (f, x, y) => {
+    flight = null;
+    if (opts.flat) {                             // about the pointer, or the middle of the drawing
+      const [x0, y0, x1, y1] = fv.area;
+      if (x == null) { x = (x0 + x1) / 2; y = (y0 + y1) / 2; }
+      const k = Math.min(Math.max(fv.k * f, fv.k0 * 0.5), fv.k0 * 60);
+      fv.x = x - (x - fv.x) * k / fv.k; fv.y = y - (y - fv.y) * k / fv.k; fv.k = k;
+    } else view.scale = Math.min(Math.max(view.scale * f, 0.6), 2000);
+    dirty = true;
+  };
+  $("zin").addEventListener("click", () => zoomBy(1.6));
+  $("zout").addEventListener("click", () => zoomBy(1 / 1.6));
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
+  }, { passive: false });
+
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, moved: 0 }; interacting = true; flight = null;
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const rect = canvas.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+    if (drag) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+      if (opts.flat) { fv.x += dx; fv.y += dy; dirty = true; return; }
+      const deg = 180 / Math.PI / (view.scale * baseScale);
+      view.lambda += dx * deg; view.phi = Math.max(-89, Math.min(89, view.phi - dy * deg));
+      dirty = true; return;
+    }
+    pickHover(x, y);
+  });
+  function endDrag(e) {
+    if (!drag) return;
+    const rect = canvas.getBoundingClientRect();
+    if (drag.moved < 5) click(e.clientX - rect.left, e.clientY - rect.top);
+    drag = null; interacting = false; canvas.classList.remove("dragging");
+  }
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", () => { drag = null; interacting = false; canvas.classList.remove("dragging"); });
+  canvas.addEventListener("pointerleave", () => {
+    if (!drag && hover >= 0) { hover = -1; $("tip").hidden = true; dirty = true; }
+    if (!drag) interacting = false;
+  });
+
+  function nearest(x, y) {
+    let best = -1, bd = 14 * 14;
+    for (let i = 0; i < screen.length; i++) {
+      const p = screen[i]; if (!p) continue;
+      const d = (p[0] - x) ** 2 + (p[1] - y) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  function pickHover(x, y) {
+    const i = nearest(x, y);
+    if (i !== hover) { hover = i; dirty = true; }
+    interacting = i >= 0;
+    const tip = $("tip");
+    if (i < 0) { tip.hidden = true; canvas.style.cursor = ""; return; }
+    const nd = current.nodes[i], deg = prepare(current).adj[i].length;
+    const drill = current.kind === "world" && nd[4];
+    tip.innerHTML = `${nd[1].replace(/[<&]/g, "")} <small>(${nd[0]}): ${deg} neighbour${deg === 1 ? "" : "s"}</small>`;
+    tip.hidden = false;
+    tip.style.left = Math.min(x + 14, W - tip.offsetWidth - 8) + "px"; tip.style.top = (y + 14) + "px";
+    canvas.style.cursor = drill ? "pointer" : "";
+  }
+  function click(x, y) {
+    const i = nearest(x, y);
+    if (i < 0) { if (hover >= 0) { hover = -1; $("tip").hidden = true; dirty = true; } return; }
+    const nd = current.nodes[i];
+    if (current.kind === "world" && nd[4]) select(nd[4], true);
+    else pickHover(x, y);
+  }
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("export-menu").hidden) { openMenu(false); $("export").focus(); return; }
+    if (!$("info").hidden && $("info").contains(document.activeElement)) { showInfo(false); $("about").focus(); return; }
+    if (current && current.kind === "country") select(lastWorld, true);
+  });
+
+  // ---- About panel: open on a first desktop visit, then as the visitor last left it ---------------
+  const narrow = matchMedia("(max-width: 760px)");
+  function showInfo(on) {
+    $("info").hidden = !on; $("about").setAttribute("aria-expanded", on);
+    document.querySelector(".app").classList.toggle("info-open", on);
+    shiftTo = on && !narrow.matches ? ($("info").offsetWidth + 16) / 2 : 0;
+    if (opts.flat && current) fitFlat(current);
+    try { localStorage.setItem("about-closed", on ? "" : "1"); } catch (e) {}
+  }
+  $("about").addEventListener("click", () => showInfo($("info").hidden));
+  $("info-close").addEventListener("click", () => { showInfo(false); $("about").focus(); });
+  narrow.addEventListener("change", () => showInfo(!$("info").hidden));
+  {
+    const fmtN = (x) => x.toLocaleString("en-US");
+    $("i-edges").textContent = fmtN(d3.sum(data.graphs, (g) => g.m));
+    $("i-unc").textContent = fmtN(d3.sum(data.graphs, (g) => g.unc));
+    let closed = false;
+    try { closed = localStorage.getItem("about-closed") === "1"; } catch (e) {}
+    // On phones the panel would cover the bottom of the globe and the list; it stays one tap away.
+    showInfo(!closed && !narrow.matches);
+    shift = shiftTo;
+  }
+
+  // ---- export -----------------------------------------------------------------------------
+  // PNG is the view on screen; SVG and TikZ draw the flat layout whole; CSV and JSON are the data.
+  const openMenu = (on) => { $("export-menu").hidden = !on; $("export").setAttribute("aria-expanded", on); };
+  $("export").addEventListener("click", () => openMenu($("export-menu").hidden));
+  addEventListener("pointerdown", (e) => { if (!e.target.closest(".export")) openMenu(false); });
+  $("export-menu").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-fmt]");
+    if (!b || !current) return;
+    openMenu(false);
+    ({ png: exportPng, svg: exportSvg, tikz: exportTikz, csv: exportCsv, json: exportJson })[b.dataset.fmt](current);
+  });
+  function save(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  const fileBase = (g) => "adjacency-" + g.id;
+  function placed(g, w, m) {                    // the flat layout fitted to width w with margin m, y down
+    const L = layout(g);
+    const xs = L.pts.map((p) => p[0]).concat(L.insets.flatMap((f) => [f[0], f[2]]));
+    const ys = L.pts.map((p) => p[1]).concat(L.insets.flatMap((f) => [f[1], f[3]]));
+    const [a, b] = d3.extent(xs), [c, d] = d3.extent(ys), k = (w - 2 * m) / Math.max(b - a, 1e-6);
+    const at = (p) => [m + (p[0] - a) * k, m + (p[1] - c) * k];
+    return { pts: L.pts.map(at), frames: L.insets.map((f) => [...at([f[0], f[1]]), ...at([f[2], f[3]])]),
+             w, h: 2 * m + (d - c) * k };
+  }
+  const showCodes = (g) => opts.labels && g.kind === "country" && g.n <= 80;
+  const code = (g, i) => g.nodes[i][0].replace(/^[A-Z]{2}-/, "");
+  function exportPng(g) {                        // the canvas redrawn at 4x, on paper
+    const S = 4;
+    canvas.width = Math.round(W * S); canvas.height = Math.round(H * S); ctx.setTransform(S, 0, 0, S, 0, 0);
+    draw();
+    const out = document.createElement("canvas");
+    out.width = canvas.width; out.height = canvas.height;
+    const o = out.getContext("2d");
+    o.fillStyle = C.paper; o.fillRect(0, 0, out.width, out.height); o.drawImage(canvas, 0, 0);
+    resize();
+    out.toBlob((b) => save(b, `${fileBase(g)}-${opts.flat ? "graph" : "globe"}.png`));
+  }
+  function exportSvg(g) {
+    const P = prepare(g), L = placed(g, 1200, 40);
+    const f = (x) => +x.toFixed(1), esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const r = g.kind === "world" ? 3.2 : 4.5;
+    const line = ([a, b]) => `<line x1="${f(L.pts[a][0])}" y1="${f(L.pts[a][1])}" x2="${f(L.pts[b][0])}" y2="${f(L.pts[b][1])}"/>`;
+    const s = [`<svg xmlns="http://www.w3.org/2000/svg" width="${L.w}" height="${f(L.h)}" viewBox="0 0 ${L.w} ${f(L.h)}">`,
+      `<title>${esc(WORLD_NAME[g.id] || g.name)}</title>`,
+      `<rect width="100%" height="100%" fill="${C.paper}"/>`,
+      `<g fill="none" stroke="${C.border}" stroke-width="1">${L.frames.map(([a, b, c, d]) => `<rect x="${f(a)}" y="${f(b)}" width="${f(c - a)}" height="${f(d - b)}" rx="4"/>`).join("")}</g>`,
+      `<g stroke="${C.edge}" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.9">${P.goodE.map(line).join("")}</g>`,
+      `<g stroke="${C.unc}" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round">${P.uncE.map(line).join("")}</g>`,
+      `<g fill="${C.node}" stroke="${C["node-ring"]}" stroke-width="1.3">${L.pts.map((p, i) =>
+        `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="${r}"><title>${esc(g.nodes[i][1])} (${esc(g.nodes[i][0])})</title></circle>`).join("")}</g>`];
+    if (showCodes(g)) s.push(`<g font-family="Geist, system-ui, sans-serif" font-size="11" font-weight="500" fill="${C.ink}" stroke="${C.paper}" stroke-width="3" paint-order="stroke" dominant-baseline="middle">${L.pts.map((p, i) =>
+      `<text x="${f(p[0] + r + 3)}" y="${f(p[1])}">${esc(code(g, i))}</text>`).join("")}</g>`);
+    s.push("</svg>");
+    save(new Blob([s.join("\n")], { type: "image/svg+xml" }), fileBase(g) + ".svg");
+  }
+  function exportTikz(g) {
+    const P = prepare(g), L = placed(g, 14, 0);
+    const f = (x) => (+x.toFixed(3)).toString(), y = (v) => f(L.h - v);   // cm, y up
+    const tex = (t) => t.replace(/[\\{}$&#^_%~]/g, (c) => ({ "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" })[c] || "\\" + c);
+    const out = [`% ${(WORLD_NAME[g.id] || g.name).replace(/\n/g, " ")}: ${LEVEL(g)} (${g.n} vertices, ${g.m} edges)`,
+      "% from the adjacency globe; vertices sit on an equal-area map, insets are moved closer",
+      "\\begin{tikzpicture}[v/.style={circle, fill=black, draw=white, line width=0.3pt, inner sep=0pt, minimum size=3.5pt},",
+      "  e/.style={line width=0.4pt}, u/.style={e, dashed, orange!80!black}, inset/.style={gray!60, line width=0.3pt, rounded corners=1pt}]"];
+    for (const [a, b, c, d] of L.frames) out.push(`  \\draw[inset] (${f(a)},${y(b)}) rectangle (${f(c)},${y(d)});`);
+    L.pts.forEach((p, i) => out.push(`  \\node[v${showCodes(g) ? `, label={[font=\\tiny]right:${tex(code(g, i))}}` : ""}] (v${i}) at (${f(p[0])},${y(p[1])}) {}; % ${g.nodes[i][0]} ${g.nodes[i][1].replace(/\n/g, " ")}`));
+    for (const [a, b] of P.goodE) out.push(`  \\draw[e] (v${a}) -- (v${b});`);
+    for (const [a, b] of P.uncE) out.push(`  \\draw[u] (v${a}) -- (v${b});`);
+    out.push("\\end{tikzpicture}", "");
+    save(new Blob([out.join("\n")], { type: "text/x-tex" }), fileBase(g) + ".tex");
+  }
+  function exportCsv(g) {
+    const q = (t) => /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    const rows = ["source_code,source_name,target_code,target_name,confirmed_border"];
+    for (const [a, b, c] of g.edges) rows.push([g.nodes[a][0], g.nodes[a][1], g.nodes[b][0], g.nodes[b][1], c ? "yes" : "no"].map(q).join(","));
+    save(new Blob([rows.join("\n") + "\n"], { type: "text/csv" }), fileBase(g) + "-edges.csv");
+  }
+  function exportJson(g) {
+    const o = { id: g.id, name: WORLD_NAME[g.id] || g.name, level: LEVEL(g),
+      vertices: g.nodes.map((nd) => ({ code: nd[0], name: nd[1], lon: nd[2], lat: nd[3] })),
+      edges: g.edges.map(([a, b, c]) => ({ source: g.nodes[a][0], target: g.nodes[b][0], confirmed_border: !!c })) };
+    save(new Blob([JSON.stringify(o, null, 2) + "\n"], { type: "application/json" }), fileBase(g) + ".json");
+  }
+
+  const start = (location.hash || "").slice(1);
+  if (byId.has(start)) {
+    select(start, false);
+    const f = fit(byId.get(start));
+    view.lambda = -f.lon; view.phi = -f.lat; view.scale = f.scale / baseScale;
+  } else select("un195", false);
+  requestAnimationFrame(frame);
+  window.__globe = { view, draw, select, opts, fv, layout };
+})();
+</script>
+</body>
+</html>
